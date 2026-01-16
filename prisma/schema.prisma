@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  USER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?   @unique
+  emailVerified DateTime?
+  image     String?
+  role      Role     @default(USER)
+  accounts      Account[]
+  sessions      Session[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotelsManaged Hotel[]   @relation("Manager")
+  bookings      Booking[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Hotel {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  
+  managerId   String?
+  manager     User?    @relation("Manager", fields: [managerId], references: [id])
+  
+  zones       Zone[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Zone {
+  id        String   @id @default(cuid())
+  name      String
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  
+  imageUrl  String?  // Background image
+  width     Int      @default(1000) // Logical width for aspect ratio
+  height    Int      @default(800)  // Logical height for aspect ratio
+  
+  sunbeds   Sunbed[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Sunbed {
+  id        String   @id @default(cuid())
+  label     String?  // Display number/name e.g. "A1"
+  x         Float    // Normalized 0..1
+  y         Float    // Normalized 0..1
+  angle     Float    @default(0) // Rotation in degrees
+  scale     Float    @default(1) // Scale factor relative to base size
+  
+  zoneId    String
+  zone      Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  
+  bookings  Booking[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([zoneId])
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  MAINTENANCE // Used by manager to block out seats
+}
+
+model Booking {
+  id        String        @id @default(cuid())
+  date      DateTime      // Date of booking (midnight UTC recommended)
+  
+  userId    String?       // Can be null if blocked by manager without user
+  user      User?         @relation(fields: [userId], references: [id])
+  
+  sunbedId  String
+  sunbed    Sunbed        @relation(fields: [sunbedId], references: [id], onDelete: Cascade)
+  
+  status    BookingStatus @default(CONFIRMED)
+  
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([sunbedId, date], name: "unique_sunbed_date_booking") // Prevents double booking
+  @@index([sunbedId, date])
+}

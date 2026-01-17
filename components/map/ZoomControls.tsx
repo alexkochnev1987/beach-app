@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 interface ZoomControlsProps {
   zoomLevel: number;
@@ -17,7 +17,7 @@ export default function ZoomControls({
   onZoomChange,
   minZoom = 0.5,
   maxZoom = 3.0,
-  step = 0.1
+  step = 0.1,
 }: ZoomControlsProps) {
   const handleZoomIn = () => {
     const newZoom = Math.min(zoomLevel + step, maxZoom);
@@ -44,11 +44,11 @@ export default function ZoomControls({
       >
         <ZoomOut className="h-4 w-4" />
       </Button>
-      
-      <div className="px-3 py-1 bg-slate-100 rounded text-sm font-medium min-w-[60px] text-center">
+
+      <div className="px-3 py-1 bg-slate-100 rounded text-sm font-medium min-w-15 text-center">
         {Math.round(zoomLevel * 100)}%
       </div>
-      
+
       <Button
         onClick={handleZoomIn}
         disabled={zoomLevel >= maxZoom}
@@ -58,7 +58,7 @@ export default function ZoomControls({
       >
         <ZoomIn className="h-4 w-4" />
       </Button>
-      
+
       <Button
         onClick={handleReset}
         variant="ghost"

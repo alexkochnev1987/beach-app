@@ -6,6 +6,7 @@ import ZoomControls from "./ZoomControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { v4 as uuidv4 } from "uuid";
 import {
   saveZoneLayout,
@@ -113,6 +114,7 @@ export default function EditorPageClient({
   >(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
   const clampZoom = (value: number) => Math.min(2.0, Math.max(0.1, value));
 
   const handleSunbedChange = (id: string, newAttrs: Partial<Sunbed>) => {
@@ -326,7 +328,7 @@ export default function EditorPageClient({
     const hasSelection =
       selectedSunbedIds.length > 0 || selectedObjectIds.length > 0;
     if (!activeType && !hasSelection) {
-      alert("Select an object type or a sunbed first.");
+      toast("Select an object type or a sunbed first.", { variant: "error" });
       return;
     }
 
@@ -370,7 +372,7 @@ export default function EditorPageClient({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed.";
-      alert(message);
+      toast(message, { variant: "error" });
     } finally {
       setIsUploading(false);
     }
@@ -454,13 +456,13 @@ export default function EditorPageClient({
       const zoomResult = await updateZoomLevel(zone.id, zoomLevel);
 
       if (sunbedResult.success && objectResult.success && zoomResult.success) {
-        alert("Layout saved successfully!");
+        toast("Layout saved successfully!", { variant: "success" });
       } else {
-        alert("Failed to save layout.");
+        toast("Failed to save layout.", { variant: "error" });
       }
     } catch (error) {
       console.error("Save error:", error);
-      alert("Failed to save layout.");
+      toast("Failed to save layout.", { variant: "error" });
     }
   };
 

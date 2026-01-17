@@ -28,5 +28,6 @@ export interface Sunbed {
   scale: number;
   imageUrl?: string | null;
   status?: 'FREE' | 'BOOKED' | 'DISABLED';
+  bookedByMe?: boolean;
   loading?: boolean;
 }

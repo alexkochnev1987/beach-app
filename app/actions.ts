@@ -175,6 +175,8 @@ export async function bookSunbed(sunbedId: string, date: Date) {
 }
 
 export async function getSunbedStatuses(zoneId: string, date: Date) {
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
     const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     
     try {
@@ -185,7 +187,11 @@ export async function getSunbedStatuses(zoneId: string, date: Date) {
                     where: {
                         date: bookingDate,
                         status: { in: ['CONFIRMED', 'MAINTENANCE'] }
-                    }
+                    },
+                    select: {
+                        status: true,
+                        userId: true,
+                    },
                 }
             }
         });
@@ -194,13 +200,46 @@ export async function getSunbedStatuses(zoneId: string, date: Date) {
             success: true,
             statuses: sunbeds.map(sb => ({
                 id: sb.id,
-                status: sb.bookings[0]?.status === 'MAINTENANCE' ? 'DISABLED' : (sb.bookings[0] ? 'BOOKED' : 'FREE')
+                status: sb.bookings[0]?.status === 'MAINTENANCE' ? 'DISABLED' : (sb.bookings[0] ? 'BOOKED' : 'FREE'),
+                bookedByMe: !!userId && sb.bookings[0]?.userId === userId,
             }))
         };
     } catch (error) {
         console.error("Failed to fetch statuses:", error);
         return { success: false, error: "Failed to fetch statuses" };
     }
+}
+
+export async function cancelBooking(sunbedId: string, date: Date) {
+  const session = await auth();
+  if (!session || !session.user) {
+    throw new Error("Unauthorized");
+  }
+
+  const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const isPrivileged = session.user.role === "MANAGER" || session.user.role === "ADMIN";
+
+  try {
+    const result = await prisma.booking.deleteMany({
+      where: {
+        sunbedId,
+        date: bookingDate,
+        status: "CONFIRMED",
+        ...(isPrivileged ? {} : { userId: session.user.id }),
+      },
+    });
+
+    if (result.count === 0) {
+      return { success: false, error: "Booking not found or not allowed" };
+    }
+
+    revalidatePath('/book');
+    eventManager.emit({ type: 'STATUS_UPDATE', sunbedId, date: bookingDate });
+    return { success: true };
+  } catch (error) {
+    console.error("Cancel booking failed:", error);
+    return { success: false, error: "Cancel booking failed" };
+  }
 }
 
 export async function saveMapObjects(zoneId: string, objects: MapObjectInput[]) {

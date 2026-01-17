@@ -15,6 +15,7 @@ import MapWrapper from '@/components/map/MapWrapper';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toggleSunbedStatus } from '@/app/actions';
 import { useManagerZoneData } from '@/hooks/useManagerZoneData';
+import { useToast } from '@/components/ui/toast';
 
 type HotelOption = { id: string; name: string };
 
@@ -37,6 +38,7 @@ export default function ManagerCalendarClient({
     const dateKey = format(date, 'yyyy-MM-dd');
     const { zone, isLoading, error } = useManagerZoneData(selectedHotelId, dateKey);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
+    const { toast } = useToast();
 
     useEffect(() => {
         setSelectedHotelId(initialHotelId);
@@ -71,7 +73,7 @@ export default function ManagerCalendarClient({
         if (result.success) {
             router.refresh();
         } else {
-            alert("Failed to update status");
+            toast("Failed to update status", { variant: "error" });
         }
     };
 

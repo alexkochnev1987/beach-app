@@ -11,6 +11,7 @@ export interface Sunbed {
     scale: number;
     imageUrl?: string | null;
     status?: 'FREE' | 'BOOKED' | 'DISABLED';
+    bookedByMe?: boolean;
     loading?: boolean;
 }
 
@@ -36,7 +37,7 @@ export function useSunbeds(zoneData: Zone, initialDate: Date) {
                     return prev.map(sb => {
                         const newStatus = res.statuses?.find(s => s.id === sb.id);
                         return newStatus 
-                            ? { ...sb, status: newStatus.status, loading: false } 
+                            ? { ...sb, status: newStatus.status, bookedByMe: newStatus.bookedByMe ?? false, loading: false } 
                             : { ...sb, loading: false };
                     });
                 });

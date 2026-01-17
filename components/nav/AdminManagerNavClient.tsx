@@ -28,12 +28,6 @@ export default function AdminManagerNavClient({
         >
           Hotel
         </Link>
-        <Link
-          className="rounded-md border px-3 py-1 hover:bg-slate-50"
-          href="/manager/calendar"
-        >
-          Bookings
-        </Link>
       </div>
     </div>
   )

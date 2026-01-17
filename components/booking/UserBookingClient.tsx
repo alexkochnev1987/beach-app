@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import MapWrapper from '@/components/map/MapWrapper';
 import ZoomControls from '@/components/map/ZoomControls';
-import { bookSunbed } from '@/app/actions';
+import { bookSunbed, cancelBooking } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useSunbeds, type Sunbed } from '@/hooks/useSunbeds';
 import type { HotelMapImage, MapObject } from '@/types/map';
+import { useToast } from '@/components/ui/toast';
 
 interface Zone {
     id: string;
@@ -24,7 +25,7 @@ interface Zone {
     objects: MapObject[];
 }
 
-export default function UserBookingClient({ zoneData, initialDate }: { zoneData: Zone, initialDate: string }) {
+export default function UserBookingClient({ zoneData, initialDate, canCancelAny }: { zoneData: Zone, initialDate: string, canCancelAny: boolean }) {
     const router = useRouter();
     const minZoom = Math.min(zoneData.zoomLevel ?? 1, 1);
     const { 
@@ -34,43 +35,106 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
         handleDateChange, 
         updateSunbedLocally 
     } = useSunbeds(zoneData, new Date(initialDate));
+    const { toast } = useToast();
 
-    const [selectedBedId, setSelectedBedId] = useState<string | null>(null);
-    const [isActionPending, setIsActionPending] = useState(false);
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+    const [selectedCancelIds, setSelectedCancelIds] = useState<string[]>([]);
+    const [pendingAction, setPendingAction] = useState<'BOOK' | 'CANCEL' | null>(null);
     const [zoomLevel, setZoomLevel] = useState<number>(minZoom);
 
     const handleDateSelect = async (newDate: Date | undefined) => {
         if (!newDate) return;
-        setSelectedBedId(null);
+        setSelectedBookIds([]);
+        setSelectedCancelIds([]);
         handleDateChange(newDate);
     };
 
     const handleSunbedClick = (id: string) => {
         const bed = sunbeds.find(b => b.id === id);
-        if (!bed || bed.status !== 'FREE') {
-            setSelectedBedId(null);
+        if (!bed || bed.loading || pendingAction) {
             return;
         }
-        setSelectedBedId(id);
+        if (bed.status === 'FREE') {
+            setSelectedCancelIds(prev => prev.filter(bedId => bedId !== id));
+            setSelectedBookIds(prev => {
+                if (prev.includes(id)) {
+                    return prev.filter(bedId => bedId !== id);
+                }
+                return [...prev, id];
+            });
+        } else if (bed.status === 'BOOKED' && (bed.bookedByMe || canCancelAny)) {
+            setSelectedBookIds(prev => prev.filter(bedId => bedId !== id));
+            setSelectedCancelIds(prev => {
+                if (prev.includes(id)) {
+                    return prev.filter(bedId => bedId !== id);
+                }
+                return [...prev, id];
+            });
+        }
     };
 
     const handleBooking = async () => {
-        if (!selectedBedId || !date) return;
+        if (selectedBookIds.length === 0 || !date) return;
         
-        setIsActionPending(true);
-        updateSunbedLocally(selectedBedId, { loading: true });
-        
-        const res = await bookSunbed(selectedBedId, date);
-        
-        if (res.success) {
-            alert("Booking Confirmed! Enjoy the sun.");
-            updateSunbedLocally(selectedBedId, { status: 'BOOKED', loading: false });
-            setSelectedBedId(null);
+        setPendingAction('BOOK');
+        selectedBookIds.forEach((bedId) => {
+            updateSunbedLocally(bedId, { loading: true });
+        });
+
+        const results = await Promise.all(
+            selectedBookIds.map(bedId => bookSunbed(bedId, date))
+        );
+        const failedIds: string[] = [];
+        results.forEach((res, index) => {
+            const bedId = selectedBookIds[index];
+            if (res.success) {
+                updateSunbedLocally(bedId, { status: 'BOOKED', bookedByMe: true, loading: false });
+            } else {
+                updateSunbedLocally(bedId, { loading: false });
+                failedIds.push(bedId);
+            }
+        });
+
+        if (failedIds.length === 0) {
+            toast("Booking Confirmed! Enjoy the sun.", { variant: "success" });
+            setSelectedBookIds([]);
         } else {
-            alert(res.error || "Booking failed");
-            updateSunbedLocally(selectedBedId, { loading: false });
+            toast("Some bookings failed. Please try again.", { variant: "error" });
+            setSelectedBookIds(failedIds);
         }
-        setIsActionPending(false);
+        setPendingAction(null);
+    };
+
+    const handleCancel = async () => {
+        if (selectedCancelIds.length === 0 || !date) return;
+
+        setPendingAction('CANCEL');
+        selectedCancelIds.forEach((bedId) => {
+            updateSunbedLocally(bedId, { loading: true });
+        });
+
+        const results = await Promise.all(
+            selectedCancelIds.map(bedId => cancelBooking(bedId, date))
+        );
+        const failedIds: string[] = [];
+        results.forEach((res, index) => {
+            const bedId = selectedCancelIds[index];
+            if (res.success) {
+                updateSunbedLocally(bedId, { status: 'FREE', bookedByMe: false, loading: false });
+            } else {
+                updateSunbedLocally(bedId, { loading: false });
+                failedIds.push(bedId);
+            }
+        });
+
+        if (failedIds.length === 0) {
+            toast("Booking cancelled.", { variant: "success" });
+            setSelectedCancelIds([]);
+        } else {
+            toast("Some cancellations failed. Please try again.", { variant: "error" });
+            setSelectedCancelIds(failedIds);
+        }
+        setPendingAction(null);
     };
 
     return (
@@ -84,9 +148,9 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
                                 "w-[240px] justify-start text-left font-normal",
                                 !date && "text-muted-foreground"
                             )}
-                            disabled={isActionPending || isLoading}
+                            disabled={!!pendingAction || isLoading}
                         >
-                            {(isActionPending || isLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
+                            {(pendingAction || isLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
                             {date ? format(new Date(date.getTime() + date.getTimezoneOffset() * 60000), "PPP") : <span>Pick a date</span>}
                         </Button>
                     </PopoverTrigger>
@@ -100,14 +164,25 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
                     </PopoverContent>
                 </Popover>
                 
-                {selectedBedId && (
+                {selectedBookIds.length > 0 && (
                      <Button 
-                        disabled={isActionPending}
+                        disabled={!!pendingAction}
                         onClick={handleBooking} 
                         className="bg-green-600 hover:bg-green-700 text-white"
                     >
-                        {isActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Confirm Booking for {sunbeds.find(s => s.id === selectedBedId)?.label || 'Sunbed'}
+                        {pendingAction === 'BOOK' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Confirm Booking ({selectedBookIds.length})
+                     </Button>
+                )}
+
+                {selectedCancelIds.length > 0 && (
+                     <Button 
+                        disabled={!!pendingAction}
+                        onClick={handleCancel} 
+                        variant="outline"
+                    >
+                        {pendingAction === 'CANCEL' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Cancel Booking ({selectedCancelIds.length})
                      </Button>
                 )}
              </div>
@@ -122,6 +197,7 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
                   zoomLevel={zoomLevel}
                   minZoom={minZoom}
                   maxZoom={1.0}
+                  selectedIds={[...selectedBookIds, ...selectedCancelIds]}
                   onSunbedClick={handleSunbedClick}
                />
 
@@ -137,6 +213,7 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
                {/* Legend Overlay */}
                <div className="absolute bottom-4 left-4 bg-white/90 p-2 rounded shadow text-xs flex gap-3">
                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded"></div>Free</div>
+                   <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded"></div>Booked by you</div>
                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-gray-400 rounded"></div>Booked</div>
                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-gray-600 rounded"></div>Unavailable</div>
                </div>

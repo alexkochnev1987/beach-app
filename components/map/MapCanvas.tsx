@@ -766,6 +766,28 @@ const SunbedNode = ({
   const rectRef = useRef<Konva.Rect>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const baseSize = Math.min(stageSize.width, stageSize.height) * 0.05;
+  const size = baseSize; // Forced scale 1
+
+  const x = shapeProps.x * stageSize.width;
+  const y = shapeProps.y * stageSize.height;
+
+  const isBookedByMe = !!shapeProps.bookedByMe;
+  const baseOpacity = shapeProps.loading
+    ? 0.3
+    : shapeProps.status === "DISABLED"
+      ? 0.5
+      : 1;
+  const overlayOpacity = image
+    ? shapeProps.loading
+      ? 0.3
+      : shapeProps.status === "DISABLED"
+        ? 0.5
+        : 0.2
+    : baseOpacity;
+  const showFreeOutline =
+    !!image && shapeProps.status === "FREE" && !shapeProps.loading;
+  const canInteract = !(isEditor && isPanMode);
 
   React.useEffect(() => {
     if (isSelected && isEditor && trRef.current && shapeRef.current) {
@@ -800,32 +822,12 @@ const SunbedNode = ({
       }, rect.getLayer());
       anim.start();
     } else if (rectRef.current) {
-      rectRef.current.opacity(shapeProps.status === "DISABLED" ? 0.5 : 1);
+      rectRef.current.opacity(overlayOpacity);
     }
     return () => {
       anim?.stop();
     };
-  }, [shapeProps.loading, shapeProps.status]);
-
-  const baseSize = Math.min(stageSize.width, stageSize.height) * 0.05;
-  const size = baseSize; // Forced scale 1
-
-  const x = shapeProps.x * stageSize.width;
-  const y = shapeProps.y * stageSize.height;
-
-  const baseOpacity = shapeProps.loading
-    ? 0.3
-    : shapeProps.status === "DISABLED"
-      ? 0.5
-      : 1;
-  const overlayOpacity = image
-    ? shapeProps.loading
-      ? 0.3
-      : shapeProps.status === "DISABLED"
-        ? 0.5
-        : 0.2
-    : baseOpacity;
-  const canInteract = !(isEditor && isPanMode);
+  }, [shapeProps.loading, shapeProps.status, overlayOpacity]);
 
   return (
     <React.Fragment>
@@ -874,7 +876,7 @@ const SunbedNode = ({
           height={size * 1.5}
           fill={
             shapeProps.status === "BOOKED"
-              ? "#9ca3af"
+              ? (isBookedByMe ? "#3b82f6" : "#9ca3af")
               : shapeProps.status === "DISABLED"
                 ? "#6b7280"
                 : "#22c55e"
@@ -885,11 +887,42 @@ const SunbedNode = ({
           offsetX={size / 2}
           offsetY={(size * 1.5) / 2}
         />
+        {!isSelected && showFreeOutline && (
+          <Rect
+            width={size}
+            height={size * 1.5}
+            stroke="#16a34a"
+            strokeWidth={2}
+            fillEnabled={false}
+            offsetX={size / 2}
+            offsetY={(size * 1.5) / 2}
+            listening={false}
+          />
+        )}
+        {!isSelected && isBookedByMe && (
+          <Rect
+            width={size}
+            height={size * 1.5}
+            stroke="#1d4ed8"
+            strokeWidth={2}
+            dash={[6, 4]}
+            fillEnabled={false}
+            offsetX={size / 2}
+            offsetY={(size * 1.5) / 2}
+            listening={false}
+          />
+        )}
         {isSelected && !isTransformable && (
           <Rect
             width={size}
             height={size * 1.5}
-            stroke="#2563eb"
+            stroke={
+              shapeProps.status === "FREE"
+                ? "#16a34a"
+                : isBookedByMe
+                  ? "#1d4ed8"
+                  : "#2563eb"
+            }
             strokeWidth={2}
             dash={[6, 4]}
             fillEnabled={false}
@@ -1190,8 +1223,7 @@ export default function MapCanvas({
     if (!stage) return;
     const isPanTrigger =
       isPanMode ||
-      ("button" in e.evt &&
-        (e.evt.button === 1 || e.evt.button === 2));
+      ("button" in e.evt && (e.evt.button === 1 || e.evt.button === 2));
     if (isPanTrigger) return;
     const clickedOnEmpty = e.target === stage;
     if (!clickedOnEmpty) return;
@@ -1320,26 +1352,28 @@ export default function MapCanvas({
       >
         {groundObjects.length > 0 && (
           <Layer>
-        {groundObjects.map((obj) => {
-          const resolvedImageUrl =
-            obj.imageUrl ?? hotelImageMap.get("SAND");
-          return (
-            <GroundObject
-              key={obj.id}
-              shapeProps={{ ...obj, imageUrl: resolvedImageUrl }}
-              isSelected={selectedIds.includes(obj.id)}
-              isTransformable={
-                isSingleSelection && selectedIds.includes(obj.id)
-              }
-              isEditor={isEditor}
-              isPanMode={isPanMode}
-              stageSize={stageSize}
-              onDragStart={() => handleDragStart(obj.id)}
-              onDragMove={(e) => handleDragMove(obj.id, e)}
-              onDragEnd={(e) => handleDragEnd(obj.id, e)}
-                onChange={(newAttrs) => {
-                  onObjectChange?.(obj.id, newAttrs);
-                }}
+            {groundObjects.map((obj) => {
+              const resolvedImageUrl =
+                obj.imageUrl ?? hotelImageMap.get("SAND");
+              return (
+                <GroundObject
+                  key={obj.id}
+                  shapeProps={{ ...obj, imageUrl: resolvedImageUrl }}
+                  isSelected={selectedIds.includes(obj.id)}
+                  isTransformable={
+                    isEditor &&
+                    isSingleSelection &&
+                    selectedIds.includes(obj.id)
+                  }
+                  isEditor={isEditor}
+                  isPanMode={isPanMode}
+                  stageSize={stageSize}
+                  onDragStart={() => handleDragStart(obj.id)}
+                  onDragMove={(e) => handleDragMove(obj.id, e)}
+                  onDragEnd={(e) => handleDragEnd(obj.id, e)}
+                  onChange={(newAttrs) => {
+                    onObjectChange?.(obj.id, newAttrs);
+                  }}
                 />
               );
             })}
@@ -1404,7 +1438,7 @@ export default function MapCanvas({
                 shapeProps={{ ...bed, imageUrl: resolvedImageUrl }}
                 isSelected={selectedIds.includes(bed.id)}
                 isTransformable={
-                  isSingleSelection && selectedIds.includes(bed.id)
+                  isEditor && isSingleSelection && selectedIds.includes(bed.id)
                 }
                 isEditor={isEditor}
                 isPanMode={isPanMode}
@@ -1413,12 +1447,12 @@ export default function MapCanvas({
                   handleItemSelect(bed.id, e);
                   onSunbedClick?.(bed.id);
                 }}
-              onDragStart={() => handleDragStart(bed.id)}
-              onDragMove={(e) => handleDragMove(bed.id, e)}
-              onDragEnd={(e) => handleDragEnd(bed.id, e)}
-              onChange={(newAttrs) => {
-                onSunbedChange?.(bed.id, newAttrs);
-              }}
+                onDragStart={() => handleDragStart(bed.id)}
+                onDragMove={(e) => handleDragMove(bed.id, e)}
+                onDragEnd={(e) => handleDragEnd(bed.id, e)}
+                onChange={(newAttrs) => {
+                  onSunbedChange?.(bed.id, newAttrs);
+                }}
               />
             );
           })}

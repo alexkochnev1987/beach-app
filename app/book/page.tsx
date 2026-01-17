@@ -44,7 +44,11 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
             where: {
               date: currentDate,
               status: { in: ['CONFIRMED', 'MAINTENANCE'] }
-            }
+            },
+            select: {
+              status: true,
+              userId: true,
+            },
           }
         }
       },
@@ -62,6 +66,7 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
   const sunbeds = zone.sunbeds.map((sb) => {
     const booking = sb.bookings[0];
     let status: 'FREE' | 'BOOKED' | 'DISABLED' = 'FREE';
+    const bookedByMe = !!booking?.userId && booking.userId === session.user?.id;
     
     if (booking) {
       status = booking.status === 'MAINTENANCE' ? 'DISABLED' : 'BOOKED';
@@ -75,7 +80,8 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
       angle: sb.angle,
       scale: sb.scale,
       imageUrl: sb.imageUrl,
-      status, 
+      status,
+      bookedByMe,
     };
   })
 
@@ -141,6 +147,7 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
         <UserBookingClient 
             zoneData={zoneData} 
             initialDate={currentDate.toISOString()} 
+            canCancelAny={session.user?.role === "ADMIN" || session.user?.role === "MANAGER"}
         />
       </div>
     </div>

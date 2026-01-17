@@ -1,50 +1,27 @@
 import { prisma } from "@/lib/prisma"
-import EditorPageClient from "@/components/map/EditorPageClient"
+import { auth } from "@/auth"
+import { redirect } from "next/navigation"
 
 export default async function DemoEditorPage() {
-  const zone = await prisma.zone.findFirst({
-    include: { 
-      sunbeds: true,
-      objects: true
-    },
+  const session = await auth()
+  if (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN")) {
+    redirect("/api/auth/signin")
+  }
+
+  const isAdmin = session.user?.role === "ADMIN"
+  const hotels = await prisma.hotel.findMany({
+    where: isAdmin ? undefined : { managerId: session.user.id },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
   })
 
-  if (!zone) {
+  if (hotels.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-xl">No zone found in database. Please run seed.</div>
+        <div className="text-xl">No managed hotels assigned yet.</div>
       </div>
     )
   }
 
-  // Transform to plain objects to avoid Date serialization warnings
-  const sunbeds = zone.sunbeds.map((sb) => ({
-    id: sb.id,
-    label: sb.label,
-    x: sb.x,
-    y: sb.y,
-    angle: sb.angle,
-    scale: sb.scale,
-    status: "FREE" as const, // Default for editor
-  }))
-
-  const objects = zone.objects.map((obj) => ({
-    id: obj.id,
-    type: obj.type as 'SEA' | 'POOL' | 'HOTEL',
-    x: obj.x,
-    y: obj.y,
-    width: obj.width,
-    height: obj.height,
-    angle: obj.angle
-  }))
-
-  const zoneData = {
-    id: zone.id,
-    backgroundColor: zone.backgroundColor || "#F4E4C1",
-    width: zone.width,
-    height: zone.height,
-    zoomLevel: zone.zoomLevel
-  }
-
-  return <EditorPageClient initialSunbeds={sunbeds} initialObjects={objects} zone={zoneData} />
+  redirect(`/manager/editor?hotelId=${encodeURIComponent(hotels[0].id)}`)
 }

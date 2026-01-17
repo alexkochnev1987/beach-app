@@ -73,6 +73,7 @@ model Hotel {
   manager     User?    @relation("Manager", fields: [managerId], references: [id])
   
   zones       Zone[]
+  mapImages   HotelMapImage[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -83,8 +84,6 @@ model Zone {
   hotelId   String
   hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   
-  imageUrl        String?
-  backgroundColor String   @default("#F4E4C1")
   width           Int      @default(1000) // Logical width for aspect ratio
   height          Int      @default(800)  // Logical height for aspect ratio
   zoomLevel       Float    @default(1.0)  // Default zoom level for this zone
@@ -102,6 +101,7 @@ model Sunbed {
   y         Float    // Normalized 0..1
   angle     Float    @default(0) // Rotation in degrees
   scale     Float    @default(1) // Scale factor relative to base size
+  imageUrl  String?
   
   zoneId    String
   zone      Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
@@ -118,6 +118,15 @@ enum ObjectType {
   SEA
   POOL
   HOTEL
+  SAND
+}
+
+enum MapEntityType {
+  SUNBED
+  SEA
+  POOL
+  HOTEL
+  SAND
 }
 
 enum BookingStatus {
@@ -153,6 +162,8 @@ model MapObject {
   width     Float      // Normalized width
   height    Float      // Normalized height
   angle     Float      @default(0)
+  backgroundColor String?
+  imageUrl        String?
   
   zoneId    String
   zone      Zone       @relation(fields: [zoneId], references: [id], onDelete: Cascade)
@@ -161,4 +172,19 @@ model MapObject {
   updatedAt DateTime   @updatedAt
 
   @@index([zoneId])
+}
+
+model HotelMapImage {
+  id         String        @id @default(cuid())
+  hotelId    String
+  entityType MapEntityType
+  imageUrl   String
+
+  hotel      Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([hotelId, entityType])
+  @@index([hotelId])
 }

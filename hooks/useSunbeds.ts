@@ -9,6 +9,7 @@ export interface Sunbed {
     y: number;
     angle: number;
     scale: number;
+    imageUrl?: string | null;
     status?: 'FREE' | 'BOOKED' | 'DISABLED';
     loading?: boolean;
 }

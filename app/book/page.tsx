@@ -3,12 +3,29 @@ import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import UserBookingClient from "@/components/booking/UserBookingClient"
+import { Label } from "@/components/ui/label"
 
-export default async function BookingPage(props: { searchParams: Promise<{ date?: string }> }) {
+export default async function BookingPage(props: { searchParams: Promise<{ date?: string; hotelId?: string }> }) {
   const searchParams = await props.searchParams;
   const session = await auth()
   if (!session) {
       redirect("/api/auth/signin?callbackUrl=/book")
+  }
+
+  const hotels = await prisma.hotel.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  })
+
+  if (hotels.length === 0) {
+    return <div className="container mx-auto p-4 max-w-4xl">No hotels found. Please contact admin.</div>
+  }
+
+  const requestedHotelId = searchParams.hotelId
+  const selectedHotelId = hotels.find((hotel) => hotel.id === requestedHotelId)?.id || hotels[0].id
+  if (!requestedHotelId || requestedHotelId !== selectedHotelId) {
+    const dateParam = searchParams.date ? `&date=${encodeURIComponent(searchParams.date)}` : ""
+    redirect(`/book?hotelId=${encodeURIComponent(selectedHotelId)}${dateParam}`)
   }
 
   const dateParam = searchParams.date ? new Date(searchParams.date) : new Date()
@@ -19,6 +36,7 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
     : new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
 
   const zone = await prisma.zone.findFirst({
+    where: { hotelId: selectedHotelId },
     include: { 
       sunbeds: {
         include: {
@@ -29,11 +47,17 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
             }
           }
         }
-      } 
+      },
+      objects: true
     },
   })
 
-  if (!zone) return <div>No zone found</div>
+  const hotelMapImages = await prisma.hotelMapImage.findMany({
+    where: { hotelId: selectedHotelId },
+    select: { hotelId: true, entityType: true, imageUrl: true },
+  })
+
+  if (!zone) return <div className="container mx-auto p-4 max-w-4xl">No zone found for this hotel.</div>
 
   const sunbeds = zone.sunbeds.map((sb) => {
     const booking = sb.bookings[0];
@@ -50,17 +74,29 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
       y: sb.y,
       angle: sb.angle,
       scale: sb.scale,
+      imageUrl: sb.imageUrl,
       status, 
     };
   })
 
   const zoneData = {
     id: zone.id,
-    imageUrl: zone.imageUrl || "",
-    backgroundColor: zone.backgroundColor || "#F4E4C1",
     width: zone.width,
     height: zone.height,
+    zoomLevel: zone.zoomLevel || 1.0,
+    hotelMapImages,
     sunbeds,
+    objects: zone.objects.map((obj) => ({
+      id: obj.id,
+      type: obj.type,
+      x: obj.x,
+      y: obj.y,
+      width: obj.width,
+      height: obj.height,
+      angle: obj.angle,
+      backgroundColor: obj.backgroundColor,
+      imageUrl: obj.imageUrl,
+    })),
   }
 
   return (
@@ -82,6 +118,25 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
       </div>
       
       <div className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+        <form action="/book" method="get" className="mb-4 flex flex-wrap items-end gap-3">
+          <div className="grid gap-1">
+            <Label htmlFor="hotelId">Hotel</Label>
+            <select
+              id="hotelId"
+              name="hotelId"
+              defaultValue={selectedHotelId}
+              className="h-9 w-[240px] rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+            >
+              {hotels.map((hotel) => (
+                <option key={hotel.id} value={hotel.id}>
+                  {hotel.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {searchParams.date ? <input type="hidden" name="date" value={searchParams.date} /> : null}
+          <Button type="submit" variant="outline" size="sm">Choose</Button>
+        </form>
         <p className="mb-4 text-slate-600">Select a date and click on a free sunbed (green) to confirm your reservation.</p>
         <UserBookingClient 
             zoneData={zoneData} 

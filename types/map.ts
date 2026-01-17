@@ -1,4 +1,11 @@
-export type ObjectType = 'SEA' | 'POOL' | 'HOTEL';
+export type ObjectType = 'SEA' | 'POOL' | 'HOTEL' | 'SAND';
+export type MapEntityType = 'SUNBED' | ObjectType;
+
+export interface HotelMapImage {
+  hotelId: string;
+  entityType: MapEntityType;
+  imageUrl: string;
+}
 
 export interface MapObject {
   id: string;
@@ -8,6 +15,8 @@ export interface MapObject {
   width: number; // Normalized width
   height: number; // Normalized height
   angle: number;
+  backgroundColor?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface Sunbed {
@@ -17,6 +26,7 @@ export interface Sunbed {
   y: number; // Normalized 0..1
   angle: number;
   scale: number;
+  imageUrl?: string | null;
   status?: 'FREE' | 'BOOKED' | 'DISABLED';
   loading?: boolean;
 }

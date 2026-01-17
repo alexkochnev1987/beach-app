@@ -2,6 +2,7 @@
 "use client"
 import React, { useState } from 'react';
 import MapWrapper from '@/components/map/MapWrapper';
+import ZoomControls from '@/components/map/ZoomControls';
 import { bookSunbed } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -11,18 +12,21 @@ import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useSunbeds, type Sunbed } from '@/hooks/useSunbeds';
+import type { HotelMapImage, MapObject } from '@/types/map';
 
 interface Zone {
     id: string;
-    imageUrl: string;
-    backgroundColor: string;
     width: number;
     height: number;
+    zoomLevel: number;
+    hotelMapImages: HotelMapImage[];
     sunbeds: Sunbed[];
+    objects: MapObject[];
 }
 
 export default function UserBookingClient({ zoneData, initialDate }: { zoneData: Zone, initialDate: string }) {
     const router = useRouter();
+    const minZoom = Math.min(zoneData.zoomLevel ?? 1, 1);
     const { 
         sunbeds, 
         date, 
@@ -33,6 +37,7 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
 
     const [selectedBedId, setSelectedBedId] = useState<string | null>(null);
     const [isActionPending, setIsActionPending] = useState(false);
+    const [zoomLevel, setZoomLevel] = useState<number>(minZoom);
 
     const handleDateSelect = async (newDate: Date | undefined) => {
         if (!newDate) return;
@@ -109,13 +114,25 @@ export default function UserBookingClient({ zoneData, initialDate }: { zoneData:
 
             <div className="bg-slate-50 border rounded-xl overflow-hidden h-[500px] relative">
                <MapWrapper
-                  imageUrl={zoneData.imageUrl}
-                  backgroundColor={zoneData.backgroundColor}
                   width={zoneData.width}
                   height={zoneData.height}
                   sunbeds={sunbeds}
+                  objects={zoneData.objects}
+                  hotelMapImages={zoneData.hotelMapImages}
+                  zoomLevel={zoomLevel}
+                  minZoom={minZoom}
+                  maxZoom={1.0}
                   onSunbedClick={handleSunbedClick}
                />
+
+               <div className="absolute top-4 right-4">
+                   <ZoomControls
+                     zoomLevel={zoomLevel}
+                     onZoomChange={setZoomLevel}
+                     minZoom={minZoom}
+                     maxZoom={1.0}
+                   />
+               </div>
                
                {/* Legend Overlay */}
                <div className="absolute bottom-4 left-4 bg-white/90 p-2 rounded shadow text-xs flex gap-3">

@@ -4,6 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { eventManager } from "@/lib/events";
+import { uploadImageToS3 } from "@/lib/s3";
+
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+}
 
 // Type definitions ensuring data safety
 interface SunbedInput {
@@ -13,17 +23,22 @@ interface SunbedInput {
   y: number;
   angle: number;
   scale: number;
+  imageUrl?: string | null;
 }
 
 interface MapObjectInput {
   id: string;
-  type: 'SEA' | 'POOL' | 'HOTEL';
+  type: 'SEA' | 'POOL' | 'HOTEL' | 'SAND';
   x: number;
   y: number;
   width: number;
   height: number;
   angle: number;
+  backgroundColor?: string | null;
+  imageUrl?: string | null;
 }
+
+type MapEntityType = 'SUNBED' | 'SEA' | 'POOL' | 'HOTEL' | 'SAND';
 
 
 export async function saveZoneLayout(zoneId: string, sunbeds: SunbedInput[]) {
@@ -33,44 +48,41 @@ export async function saveZoneLayout(zoneId: string, sunbeds: SunbedInput[]) {
     throw new Error("Unauthorized");
   }
 
-  // Use a transaction to ensure integrity
-  // Note: For large numbers, deleteMany/createMany is easier than individual upserts
-  // But to preserve IDs (if needed for bookings), upsert is better.
-  // For Editor, we usually assume the Client knows the IDs.
-  
+  // Avoid interactive transaction timeouts by batching upserts.
   try {
-     await prisma.$transaction(async (tx) => {
-         // Delete sunbeds that are no longer present
-         const sunbedIds = sunbeds.map(b => b.id);
-         await tx.sunbed.deleteMany({
-             where: {
-                 zoneId: zoneId,
-                 id: { notIn: sunbedIds }
-             }
-         });
-
-         for (const bed of sunbeds) {
-             await tx.sunbed.upsert({
-                 where: { id: bed.id },
-                 create: {
-                     id: bed.id,
-                     zoneId: zoneId,
-                     label: bed.label,
-                     x: bed.x,
-                     y: bed.y,
-                     angle: bed.angle,
-                     scale: bed.scale
-                 },
-                 update: {
-                     x: bed.x,
-                     y: bed.y,
-                     angle: bed.angle,
-                     scale: bed.scale,
-                     label: bed.label
-                 }
-             });
-         }
+     const sunbedIds = sunbeds.map(b => b.id);
+     await prisma.sunbed.deleteMany({
+       where: {
+         zoneId: zoneId,
+         id: { notIn: sunbedIds }
+       }
      });
+
+     const batchSize = 50;
+     for (let i = 0; i < sunbeds.length; i += batchSize) {
+       const batch = sunbeds.slice(i, i + batchSize);
+       await Promise.all(batch.map((bed) => prisma.sunbed.upsert({
+         where: { id: bed.id },
+         create: {
+           id: bed.id,
+           zoneId: zoneId,
+           label: bed.label,
+           x: bed.x,
+           y: bed.y,
+           angle: bed.angle,
+           scale: bed.scale,
+           imageUrl: bed.imageUrl ?? null
+         },
+         update: {
+           x: bed.x,
+           y: bed.y,
+           angle: bed.angle,
+           scale: bed.scale,
+           label: bed.label,
+           imageUrl: bed.imageUrl ?? null
+         }
+       })));
+     }
      
      revalidatePath(`/manager`);
      revalidatePath(`/demo/editor`);
@@ -199,40 +211,43 @@ export async function saveMapObjects(zoneId: string, objects: MapObjectInput[]) 
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      // Delete objects that are no longer present
-      const objectIds = objects.map(o => o.id);
-      await tx.mapObject.deleteMany({
-        where: {
-          zoneId: zoneId,
-          id: { notIn: objectIds }
-        }
-      });
-
-      for (const obj of objects) {
-        await tx.mapObject.upsert({
-          where: { id: obj.id },
-          create: {
-            id: obj.id,
-            zoneId: zoneId,
-            type: obj.type,
-            x: obj.x,
-            y: obj.y,
-            width: obj.width,
-            height: obj.height,
-            angle: obj.angle
-          },
-          update: {
-            type: obj.type,
-            x: obj.x,
-            y: obj.y,
-            width: obj.width,
-            height: obj.height,
-            angle: obj.angle
-          }
-        });
+    const objectIds = objects.map(o => o.id);
+    await prisma.mapObject.deleteMany({
+      where: {
+        zoneId: zoneId,
+        id: { notIn: objectIds }
       }
     });
+
+    const batchSize = 50;
+    for (let i = 0; i < objects.length; i += batchSize) {
+      const batch = objects.slice(i, i + batchSize);
+      await Promise.all(batch.map((obj) => prisma.mapObject.upsert({
+        where: { id: obj.id },
+        create: {
+          id: obj.id,
+          zoneId: zoneId,
+          type: obj.type,
+          x: obj.x,
+          y: obj.y,
+          width: obj.width,
+          height: obj.height,
+          angle: obj.angle,
+          backgroundColor: obj.backgroundColor ?? null,
+          imageUrl: obj.imageUrl ?? null
+        },
+        update: {
+          type: obj.type,
+          x: obj.x,
+          y: obj.y,
+          width: obj.width,
+          height: obj.height,
+          angle: obj.angle,
+          backgroundColor: obj.backgroundColor ?? null,
+          imageUrl: obj.imageUrl ?? null
+        }
+      })));
+    }
 
     revalidatePath(`/manager`);
     revalidatePath(`/demo/editor`);
@@ -275,12 +290,14 @@ export async function getMapObjects(zoneId: string) {
       success: true,
       objects: objects.map(obj => ({
         id: obj.id,
-        type: obj.type as 'SEA' | 'POOL' | 'HOTEL',
+        type: obj.type as 'SEA' | 'POOL' | 'HOTEL' | 'SAND',
         x: obj.x,
         y: obj.y,
         width: obj.width,
         height: obj.height,
-        angle: obj.angle
+        angle: obj.angle,
+        backgroundColor: obj.backgroundColor,
+        imageUrl: obj.imageUrl
       }))
     };
   } catch (error) {
@@ -289,24 +306,159 @@ export async function getMapObjects(zoneId: string) {
   }
 }
 
-export async function updateZoneBackground(zoneId: string, backgroundColor: string) {
+export async function uploadMapObjectImage(params: {
+  base64: string;
+  hotelId: string;
+}) {
   const session = await auth();
-  const isDev = process.env.NODE_ENV === 'development';
-  if (!isDev && (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))) {
+  const isDev = process.env.NODE_ENV === "development";
+  if (
+    !isDev &&
+    (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))
+  ) {
     throw new Error("Unauthorized");
   }
 
+  if (!params.base64 || !params.hotelId) {
+    return { success: false, error: "Missing parameters." };
+  }
+
+  const publicUrl = await uploadImageToS3(params.base64, params.hotelId);
+  if (!publicUrl) {
+    return { success: false, error: "Failed to upload image." };
+  }
+
+  return { success: true, publicUrl };
+}
+
+export async function getHotelMapImages(hotelId: string) {
+  if (!hotelId) {
+    return { success: false, error: "Missing hotelId." };
+  }
+
   try {
-    await prisma.zone.update({
-      where: { id: zoneId },
-      data: { backgroundColor }
+    const images = await prisma.hotelMapImage.findMany({
+      where: { hotelId },
+      select: { hotelId: true, entityType: true, imageUrl: true },
+    });
+    return { success: true, images };
+  } catch (error) {
+    console.error("Failed to fetch hotel map images:", error);
+    return { success: false, error: "Failed to fetch hotel map images." };
+  }
+}
+
+export async function setHotelMapImage(params: {
+  hotelId: string;
+  entityType: MapEntityType;
+  imageUrl: string;
+}) {
+  const session = await auth();
+  const isDev = process.env.NODE_ENV === "development";
+  if (
+    !isDev &&
+    (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))
+  ) {
+    throw new Error("Unauthorized");
+  }
+
+  if (!params.hotelId || !params.entityType || !params.imageUrl) {
+    return { success: false, error: "Missing parameters." };
+  }
+
+  try {
+    await prisma.hotelMapImage.upsert({
+      where: {
+        hotelId_entityType: {
+          hotelId: params.hotelId,
+          entityType: params.entityType,
+        },
+      },
+      create: {
+        hotelId: params.hotelId,
+        entityType: params.entityType,
+        imageUrl: params.imageUrl,
+      },
+      update: { imageUrl: params.imageUrl },
     });
 
     revalidatePath(`/manager`);
     revalidatePath(`/demo/editor`);
     return { success: true };
   } catch (error) {
-    console.error("Failed to update background color:", error);
-    return { success: false, error: "Failed to update background color" };
+    console.error("Failed to save hotel map image:", error);
+    return { success: false, error: "Failed to save hotel map image." };
+  }
+}
+
+export async function updateHotelSettings(params: {
+  hotelId: string
+  name: string
+  slug?: string
+  description?: string | null
+}) {
+  const session = await auth()
+  if (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN")) {
+    throw new Error("Unauthorized")
+  }
+
+  const hotel = await prisma.hotel.findUnique({ where: { id: params.hotelId } })
+  if (!hotel) {
+    return { success: false, error: "Hotel not found." }
+  }
+
+  const isAdmin = session.user?.role === "ADMIN"
+  if (!isAdmin && hotel.managerId !== session.user?.id) {
+    throw new Error("Unauthorized")
+  }
+
+  if (!params.name.trim()) {
+    return { success: false, error: "Please provide a hotel name." }
+  }
+
+  const nextSlug = isAdmin
+    ? (params.slug ? slugify(params.slug) : hotel.slug)
+    : hotel.slug
+
+  if (isAdmin && nextSlug !== hotel.slug) {
+    const existing = await prisma.hotel.findUnique({ where: { slug: nextSlug } })
+    if (existing && existing.id !== hotel.id) {
+      return { success: false, error: "Slug already exists." }
+    }
+  }
+
+  try {
+    await prisma.hotel.update({
+      where: { id: hotel.id },
+      data: {
+        name: params.name.trim(),
+        description: params.description ?? null,
+        ...(isAdmin ? { slug: nextSlug } : {}),
+      },
+    })
+
+    revalidatePath("/manager")
+    revalidatePath("/admin/hotels")
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to update hotel:", error)
+    return { success: false, error: "Failed to update hotel." }
+  }
+}
+
+export async function deleteHotelById(hotelId: string) {
+  const session = await auth()
+  if (!session || session.user?.role !== "ADMIN") {
+    throw new Error("Unauthorized")
+  }
+
+  try {
+    await prisma.hotel.delete({ where: { id: hotelId } })
+    revalidatePath("/manager")
+    revalidatePath("/admin/hotels")
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to delete hotel:", error)
+    return { success: false, error: "Failed to delete hotel." }
   }
 }

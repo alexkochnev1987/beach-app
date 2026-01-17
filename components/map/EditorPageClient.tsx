@@ -106,6 +106,7 @@ export default function EditorPageClient({
   );
   const [zoomLevel, setZoomLevel] = useState<number>(zone.zoomLevel || 1.0);
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
+  const [isPanMode, setIsPanMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedTool, setSelectedTool] = useState<
     "sunbed" | ObjectType | null
@@ -113,7 +114,6 @@ export default function EditorPageClient({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clampZoom = (value: number) => Math.min(2.0, Math.max(0.1, value));
-  const panStep = 60;
 
   const handleSunbedChange = (id: string, newAttrs: Partial<Sunbed>) => {
     setSunbeds((prev) =>
@@ -615,7 +615,22 @@ export default function EditorPageClient({
           {isUploading ? "Uploading..." : "Image"}
         </Button>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-4">
+          <div
+            className="flex items-center gap-2"
+            title="Hold Space to pan. On touch devices, toggle this to drag the map."
+          >
+            <input
+              id="pan-mode"
+              type="checkbox"
+              checked={isPanMode}
+              onChange={(e) => setIsPanMode(e.target.checked)}
+              className="h-4 w-4 accent-slate-900"
+            />
+            <Label htmlFor="pan-mode" className="font-semibold cursor-pointer">
+              Pan
+            </Label>
+          </div>
           <Label htmlFor="zoom-input" className="font-semibold">
             Zoom:
           </Label>
@@ -641,45 +656,6 @@ export default function EditorPageClient({
       </div>
 
       <div className="flex-1 w-full bg-slate-50 border rounded-xl overflow-hidden relative">
-        <div className="absolute left-3 top-3 z-10 grid grid-cols-3 gap-1">
-          <div />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => setViewOffset((prev) => ({ x: prev.x, y: prev.y - panStep }))}
-          >
-            Up
-          </Button>
-          <div />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => setViewOffset((prev) => ({ x: prev.x - panStep, y: prev.y }))}
-          >
-            Left
-          </Button>
-          <div />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => setViewOffset((prev) => ({ x: prev.x + panStep, y: prev.y }))}
-          >
-            Right
-          </Button>
-          <div />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => setViewOffset((prev) => ({ x: prev.x, y: prev.y + panStep }))}
-          >
-            Down
-          </Button>
-          <div />
-        </div>
         <MapWrapper
           width={zone.width}
           height={zone.height}
@@ -707,6 +683,8 @@ export default function EditorPageClient({
           viewOffset={viewOffset}
           onViewOffsetChange={setViewOffset}
           onZoomChange={setZoomLevel}
+          isPanMode={isPanMode}
+          onPanModeChange={setIsPanMode}
           isEditor={true}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}

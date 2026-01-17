@@ -23,11 +23,13 @@ interface MapCanvasProps {
   minZoom?: number;
   maxZoom?: number;
   isEditor?: boolean;
+  isPanMode?: boolean;
   selectedIds?: string[];
   hotelMapImages?: HotelMapImage[];
   onZoomChange?: (zoomLevel: number) => void;
   viewOffset?: { x: number; y: number };
   onViewOffsetChange?: (offset: { x: number; y: number }) => void;
+  onPanModeChange?: (isPanMode: boolean) => void;
   onSelectionChange?: (ids: string[]) => void;
   onSunbedChange?: (id: string, newAttrs: Partial<Sunbed>) => void;
   onSunbedClick?: (id: string) => void;
@@ -67,6 +69,7 @@ const GroundObject = ({
   isSelected,
   isTransformable,
   isEditor,
+  isPanMode,
   onChange,
   onDragStart,
   onDragMove,
@@ -77,6 +80,7 @@ const GroundObject = ({
   isSelected: boolean;
   isTransformable: boolean;
   isEditor: boolean;
+  isPanMode: boolean;
   onChange: (newAttrs: Partial<MapObject>) => void;
   onDragStart?: (e: Konva.KonvaEventObject<DragEvent>) => void;
   onDragMove?: (e: Konva.KonvaEventObject<DragEvent>) => void;
@@ -120,6 +124,7 @@ const GroundObject = ({
   const y = shapeProps.y * stageSize.height;
   const w = shapeProps.width * stageSize.width;
   const h = shapeProps.height * stageSize.height;
+  const canInteract = !(isEditor && isPanMode);
 
   return (
     <React.Fragment>
@@ -128,8 +133,8 @@ const GroundObject = ({
         x={x}
         y={y}
         rotation={shapeProps.angle}
-        draggable={isEditor && isSelected}
-        listening={isEditor && isSelected}
+        draggable={isEditor && isSelected && canInteract}
+        listening={isEditor && isSelected && canInteract}
         onDragStart={onDragStart}
         onDragMove={onDragMove}
         onDragEnd={(e) => {
@@ -207,6 +212,7 @@ const SeaObject = ({
   isSelected,
   isTransformable,
   isEditor,
+  isPanMode,
   onSelect,
   onChange,
   onDragStart,
@@ -218,6 +224,7 @@ const SeaObject = ({
   isSelected: boolean;
   isTransformable: boolean;
   isEditor: boolean;
+  isPanMode: boolean;
   onSelect: (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onChange: (newAttrs: Partial<MapObject>) => void;
   onDragStart?: (e: Konva.KonvaEventObject<DragEvent>) => void;
@@ -276,6 +283,7 @@ const SeaObject = ({
   const h = shapeProps.height * stageSize.height;
   const baseScaleX = w / 100;
   const baseScaleY = h / 100;
+  const canInteract = !(isEditor && isPanMode);
 
   // Create wavy sea shape (static, will be scaled by Group)
   const points = [
@@ -306,7 +314,8 @@ const SeaObject = ({
         scaleX={baseScaleX}
         scaleY={baseScaleY}
         rotation={shapeProps.angle}
-        draggable={isEditor}
+        draggable={isEditor && canInteract}
+        listening={canInteract}
         onClick={onSelect}
         onTap={onSelect}
         onDragStart={onDragStart}
@@ -402,6 +411,7 @@ const PoolObject = ({
   isSelected,
   isTransformable,
   isEditor,
+  isPanMode,
   onSelect,
   onChange,
   onDragStart,
@@ -413,6 +423,7 @@ const PoolObject = ({
   isSelected: boolean;
   isTransformable: boolean;
   isEditor: boolean;
+  isPanMode: boolean;
   onSelect: (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onChange: (newAttrs: Partial<MapObject>) => void;
   onDragStart?: (e: Konva.KonvaEventObject<DragEvent>) => void;
@@ -457,6 +468,7 @@ const PoolObject = ({
   const y = shapeProps.y * stageSize.height;
   const w = shapeProps.width * stageSize.width;
   const h = shapeProps.height * stageSize.height;
+  const canInteract = !(isEditor && isPanMode);
 
   return (
     <React.Fragment>
@@ -467,7 +479,8 @@ const PoolObject = ({
         width={w}
         height={h}
         rotation={shapeProps.angle}
-        draggable={isEditor}
+        draggable={isEditor && canInteract}
+        listening={canInteract}
         onClick={onSelect}
         onTap={onSelect}
         onDragStart={onDragStart}
@@ -552,6 +565,7 @@ const HotelObject = ({
   isSelected,
   isTransformable,
   isEditor,
+  isPanMode,
   onSelect,
   onChange,
   onDragStart,
@@ -563,6 +577,7 @@ const HotelObject = ({
   isSelected: boolean;
   isTransformable: boolean;
   isEditor: boolean;
+  isPanMode: boolean;
   onSelect: (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onChange: (newAttrs: Partial<MapObject>) => void;
   onDragStart?: (e: Konva.KonvaEventObject<DragEvent>) => void;
@@ -608,6 +623,7 @@ const HotelObject = ({
 
   const w = shapeProps.width * stageSize.width;
   const h = shapeProps.height * stageSize.height;
+  const canInteract = !(isEditor && isPanMode);
 
   // Create windows grid
   const windowRows = 3;
@@ -642,7 +658,8 @@ const HotelObject = ({
         width={w}
         height={h}
         rotation={shapeProps.angle}
-        draggable={isEditor}
+        draggable={isEditor && canInteract}
+        listening={canInteract}
         onClick={onSelect}
         onTap={onSelect}
         onDragStart={onDragStart}
@@ -725,6 +742,7 @@ const SunbedNode = ({
   isSelected,
   isTransformable,
   isEditor,
+  isPanMode,
   onSelect,
   onChange,
   onDragStart,
@@ -736,6 +754,7 @@ const SunbedNode = ({
   isSelected: boolean;
   isTransformable: boolean;
   isEditor: boolean;
+  isPanMode: boolean;
   onSelect: (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   onChange: (newAttrs: Partial<Sunbed>) => void;
   onDragStart?: (e: Konva.KonvaEventObject<DragEvent>) => void;
@@ -806,6 +825,7 @@ const SunbedNode = ({
         ? 0.5
         : 0.2
     : baseOpacity;
+  const canInteract = !(isEditor && isPanMode);
 
   return (
     <React.Fragment>
@@ -814,7 +834,8 @@ const SunbedNode = ({
         x={x}
         y={y}
         rotation={shapeProps.angle}
-        draggable={isEditor}
+        draggable={isEditor && canInteract}
+        listening={canInteract}
         onClick={onSelect}
         onTap={onSelect}
         onDragStart={onDragStart}
@@ -903,11 +924,13 @@ export default function MapCanvas({
   minZoom = 0.1,
   maxZoom = 2.0,
   isEditor = false,
+  isPanMode: isPanModeProp,
   selectedIds: selectedIdsProp,
   hotelMapImages = [],
   onZoomChange,
   viewOffset: viewOffsetProp,
   onViewOffsetChange,
+  onPanModeChange,
   onSelectionChange,
   onSunbedChange,
   onSunbedClick,
@@ -920,7 +943,7 @@ export default function MapCanvas({
   const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([]);
   const [internalZoom, setInternalZoom] = useState<number>(zoomLevel);
   const [internalViewOffset, setInternalViewOffset] = useState({ x: 0, y: 0 });
-  const [isPanMode, setIsPanMode] = useState(false);
+  const [internalIsPanMode, setInternalIsPanMode] = useState(false);
   const [selectionBox, setSelectionBox] = useState({
     x: 0,
     y: 0,
@@ -937,6 +960,8 @@ export default function MapCanvas({
   const setSelectedIds = onSelectionChange ?? setInternalSelectedIds;
   const viewOffset = viewOffsetProp ?? internalViewOffset;
   const setViewOffset = onViewOffsetChange ?? setInternalViewOffset;
+  const isPanMode = isPanModeProp ?? internalIsPanMode;
+  const setIsPanMode = onPanModeChange ?? setInternalIsPanMode;
 
   useEffect(() => {
     const checkSize = () => {
@@ -1072,9 +1097,13 @@ export default function MapCanvas({
   };
 
   const getStagePointerPosition = (stage: Konva.Stage | null) => {
-    const pos = stage?.getPointerPosition();
+    if (!stage) return null;
+    const pos = stage.getPointerPosition();
     if (!pos) return null;
-    return { x: pos.x - viewOffset.x, y: pos.y - viewOffset.y };
+    const transform = stage.getAbsoluteTransform().copy();
+    transform.invert();
+    const point = transform.point(pos);
+    return { x: point.x, y: point.y };
   };
 
   const handleItemSelect = (
@@ -1256,13 +1285,13 @@ export default function MapCanvas({
   };
 
   const handleStageDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
-    if (isEditor) return;
+    if (isEditor && !isPanMode) return;
     const next = clampViewOffset({ x: e.target.x(), y: e.target.y() });
     setViewOffset(next);
   };
 
   const handleStageDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    if (isEditor) return;
+    if (isEditor && !isPanMode) return;
     const next = clampViewOffset({ x: e.target.x(), y: e.target.y() });
     setViewOffset(next);
   };
@@ -1278,7 +1307,7 @@ export default function MapCanvas({
         height={containerSize.height}
         x={viewOffset.x}
         y={viewOffset.y}
-        draggable={!isEditor}
+        draggable={isEditor ? isPanMode : true}
         onMouseDown={handleStageMouseDown}
         onTouchStart={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
@@ -1291,22 +1320,23 @@ export default function MapCanvas({
       >
         {groundObjects.length > 0 && (
           <Layer>
-            {groundObjects.map((obj) => {
-              const resolvedImageUrl =
-                obj.imageUrl ?? hotelImageMap.get("SAND");
-              return (
-                <GroundObject
-                  key={obj.id}
-                  shapeProps={{ ...obj, imageUrl: resolvedImageUrl }}
-                isSelected={selectedIds.includes(obj.id)}
-                isTransformable={
-                  isSingleSelection && selectedIds.includes(obj.id)
-                }
-                isEditor={isEditor}
-                stageSize={stageSize}
-                onDragStart={() => handleDragStart(obj.id)}
-                onDragMove={(e) => handleDragMove(obj.id, e)}
-                onDragEnd={(e) => handleDragEnd(obj.id, e)}
+        {groundObjects.map((obj) => {
+          const resolvedImageUrl =
+            obj.imageUrl ?? hotelImageMap.get("SAND");
+          return (
+            <GroundObject
+              key={obj.id}
+              shapeProps={{ ...obj, imageUrl: resolvedImageUrl }}
+              isSelected={selectedIds.includes(obj.id)}
+              isTransformable={
+                isSingleSelection && selectedIds.includes(obj.id)
+              }
+              isEditor={isEditor}
+              isPanMode={isPanMode}
+              stageSize={stageSize}
+              onDragStart={() => handleDragStart(obj.id)}
+              onDragMove={(e) => handleDragMove(obj.id, e)}
+              onDragEnd={(e) => handleDragEnd(obj.id, e)}
                 onChange={(newAttrs) => {
                   onObjectChange?.(obj.id, newAttrs);
                 }}
@@ -1346,6 +1376,7 @@ export default function MapCanvas({
                   isSingleSelection && selectedIds.includes(obj.id)
                 }
                 isEditor={isEditor}
+                isPanMode={isPanMode}
                 stageSize={stageSize}
                 onSelect={(e) => {
                   handleItemSelect(obj.id, e);
@@ -1371,16 +1402,17 @@ export default function MapCanvas({
               <SunbedNode
                 key={bed.id}
                 shapeProps={{ ...bed, imageUrl: resolvedImageUrl }}
-              isSelected={selectedIds.includes(bed.id)}
-              isTransformable={
-                isSingleSelection && selectedIds.includes(bed.id)
-              }
-              isEditor={isEditor}
-              stageSize={stageSize}
-              onSelect={(e) => {
-                handleItemSelect(bed.id, e);
-                onSunbedClick?.(bed.id);
-              }}
+                isSelected={selectedIds.includes(bed.id)}
+                isTransformable={
+                  isSingleSelection && selectedIds.includes(bed.id)
+                }
+                isEditor={isEditor}
+                isPanMode={isPanMode}
+                stageSize={stageSize}
+                onSelect={(e) => {
+                  handleItemSelect(bed.id, e);
+                  onSunbedClick?.(bed.id);
+                }}
               onDragStart={() => handleDragStart(bed.id)}
               onDragMove={(e) => handleDragMove(bed.id, e)}
               onDragEnd={(e) => handleDragEnd(bed.id, e)}

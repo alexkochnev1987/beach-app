@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useTransition } from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -12,7 +12,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import MapWrapper from '@/components/map/MapWrapper';
-
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toggleSunbedStatus } from '@/app/actions';
 
 interface Sunbed {
@@ -28,66 +28,65 @@ interface Sunbed {
 interface Zone {
     id: string;
     imageUrl: string;
+    backgroundColor: string;
     width: number;
     height: number;
     sunbeds: Sunbed[];
 }
 
 export default function ManagerCalendarClient({ 
-    zoneData 
+    zoneData,
+    initialDate
 }: { 
-    zoneData: Zone 
+    zoneData: Zone,
+    initialDate: string
 }) {
-    const [date, setDate] = useState<Date | undefined>(new Date());
-    const [sunbeds, setSunbeds] = useState<Sunbed[]>(zoneData.sunbeds);
-    const [loading, setLoading] = useState(false);
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const [isPending, startTransition] = useTransition();
 
-    useEffect(() => {
-        if (!date) return;
-        setLoading(true);
-        getAvailability(zoneData.id, date).then(res => {
-            if (res.success && res.bookings) {
-                const bookingMap = new Map(res.bookings.map(b => [b.sunbedId, b.status]));
-                setSunbeds(zoneData.sunbeds.map(sb => ({
-                    ...sb,
-                    status: (bookingMap.get(sb.id) as any) || 'FREE'
-                })));
-            }
-            setLoading(false);
+    const date = new Date(initialDate);
+    const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+    const handleDateSelect = (newDate: Date | undefined) => {
+        if (!newDate) return;
+        
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams);
+            params.set('date', format(newDate, 'yyyy-MM-dd'));
+            router.push(`${pathname}?${params.toString()}`);
         });
-    }, [date, zoneData]);
+    };
 
     const handleSunbedClick = async (id: string) => {
-        if (!date) {
-            alert("Pick a date first");
-            return;
-        }
+        if (!date) return;
         
-        const bed = sunbeds.find(b => b.id === id);
+        const bed = zoneData.sunbeds.find(b => b.id === id);
         if (!bed) return;
         
         const currentStatus = bed.status || 'FREE';
-        
-        // Optimistic update
-        // If FREE -> DISABLED. If DISABLED -> FREE. 
-        // We generally don't toggle BOOKED here as manager (usually manager cancels booking via dialog)
-        // But for simplicity let's allow manager to overwrite anything to maintenance.
-        
         const nextStatus = currentStatus === 'FREE' ? 'DISABLED' : 'FREE';
         
-        setSunbeds(prev => prev.map(sb => sb.id === id ? { ...sb, status: nextStatus } : sb));
-        
+        setLoadingAction(id);
         const result = await toggleSunbedStatus(id, date, currentStatus);
+        setLoadingAction(null);
         
-        if (!result.success) {
-            // Rollback
-            setSunbeds(prev => prev.map(sb => sb.id === id ? { ...sb, status: currentStatus } : sb));
+        if (result.success) {
+            router.refresh();
+        } else {
             alert("Failed to update status");
         }
     };
 
     return (
-        <div className="flex flex-col h-screen p-4 gap-4">
+        <div className="flex flex-col h-screen p-4 gap-4 relative">
+            {(isPending) && (
+                <div className="absolute inset-0 z-50 bg-white/20 backdrop-blur-[1px] flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            )}
+            
             <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow">
                 <h1 className="text-xl font-bold">Availability Manager</h1>
                 
@@ -108,7 +107,7 @@ export default function ManagerCalendarClient({
                         <Calendar
                             mode="single"
                             selected={date}
-                            onSelect={setDate}
+                            onSelect={handleDateSelect}
                             initialFocus
                         />
                     </PopoverContent>
@@ -116,20 +115,18 @@ export default function ManagerCalendarClient({
             </div>
 
             <div className="flex-1 w-full bg-slate-50 border rounded-xl overflow-hidden relative">
-                {loading && (
-                    <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    </div>
-                )}
                 <MapWrapper 
                     imageUrl={zoneData.imageUrl}
+                    backgroundColor={zoneData.backgroundColor}
                     width={zoneData.width}
                     height={zoneData.height}
-                    sunbeds={sunbeds}
+                    sunbeds={zoneData.sunbeds}
                     onSunbedClick={handleSunbedClick}
-                    // Not editor mode, but we want interactivity
-                    // The MapCanvas component needs to handle 'onSunbedClick' properly if isEditor is false
                 />
+                
+                {loadingAction && (
+                    <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] pointer-events-none" />
+                )}
             </div>
             
              <div className="flex gap-4 text-sm">

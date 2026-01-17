@@ -1,61 +1,70 @@
-import 'dotenv/config'
-import { PrismaClient, Role } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+import { prisma } from '@/lib/prisma'
 
 async function main() {
-  // 1. Create Admin/Manager User
-  const managerEmail = "manager@example.com"
-  const manager = await prisma.user.upsert({
-    where: { email: managerEmail },
-    update: {},
-    create: {
-      email: managerEmail,
-      name: "Manager Alice",
-      role: Role.MANAGER,
-    },
-  })
+  console.log('Clearing existing data...')
+  await prisma.booking.deleteMany()
+  await prisma.sunbed.deleteMany()
+  await prisma.mapObject.deleteMany()
+  await prisma.zone.deleteMany()
+  await prisma.hotel.deleteMany()
+  // User deletion might be tricky if there are many users, but let's clear them too if needed.
+  // Generally it's safer to clear everything related to the business logic.
+  
+  console.log('Seeding database...')
 
-  // 2. Create Hotel
+  // Create a Hotel
   const hotel = await prisma.hotel.upsert({
-    where: { slug: "grand-beach-resort" },
+    where: { slug: 'blue-lagoon-resort' },
     update: {},
     create: {
-      name: "Grand Beach Resort",
-      slug: "grand-beach-resort",
-      description: "Luxury relaxation by the sea.",
-      managerId: manager.id,
+      name: 'Blue Lagoon Resort',
+      slug: 'blue-lagoon-resort',
+      description: 'The most beautiful beach resort in the world.',
     },
   })
 
-  // 3. Create Zone
+  // Create a Zone for this hotel
   const zone = await prisma.zone.create({
     data: {
-      name: "VIP Poolside",
+      name: 'Beach East',
       hotelId: hotel.id,
-      imageUrl: "https://images.unsplash.com/photo-1540206351-d6465b3ac5c1?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80",
-      width: 1000,
+      width: 1200,
       height: 800,
-      sunbeds: {
-        create: [
-            { label: "A1", x: 0.2, y: 0.2, angle: 0 },
-            { label: "A2", x: 0.3, y: 0.2, angle: 0 },
-            { label: "B1", x: 0.2, y: 0.4, angle: 45 },
-            { label: "B2", x: 0.3, y: 0.4, angle: 45 },
-        ]
-      }
-    }
+    },
   })
 
-  console.log({ manager, hotel, zone })
+  // Create some sunbeds in a grid
+  const sunbeds = []
+  const rows = 4
+  const cols = 6
+  
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      sunbeds.push({
+        label: `${String.fromCharCode(65 + r)}${c + 1}`,
+        x: 0.2 + c * 0.12,
+        y: 0.3 + r * 0.15,
+        angle: 0,
+        scale: 1,
+        zoneId: zone.id,
+      })
+    }
+  }
+
+  await prisma.sunbed.createMany({
+    data: sunbeds,
+  })
+
+  console.log('Seed completed successfully.')
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect()
-  })
-  .catch(async (e) => {
+  .catch((e) => {
     console.error(e)
-    await prisma.$disconnect()
     process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
   })

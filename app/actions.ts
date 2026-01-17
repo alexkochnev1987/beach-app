@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
+import { eventManager } from "@/lib/events";
 
 // Type definitions ensuring data safety
 interface SunbedInput {
@@ -14,9 +15,21 @@ interface SunbedInput {
   scale: number;
 }
 
+interface MapObjectInput {
+  id: string;
+  type: 'SEA' | 'POOL' | 'HOTEL';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  angle: number;
+}
+
+
 export async function saveZoneLayout(zoneId: string, sunbeds: SunbedInput[]) {
   const session = await auth();
-  if (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN")) {
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev && (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))) {
     throw new Error("Unauthorized");
   }
 
@@ -27,6 +40,15 @@ export async function saveZoneLayout(zoneId: string, sunbeds: SunbedInput[]) {
   
   try {
      await prisma.$transaction(async (tx) => {
+         // Delete sunbeds that are no longer present
+         const sunbedIds = sunbeds.map(b => b.id);
+         await tx.sunbed.deleteMany({
+             where: {
+                 zoneId: zoneId,
+                 id: { notIn: sunbedIds }
+             }
+         });
+
          for (const bed of sunbeds) {
              await tx.sunbed.upsert({
                  where: { id: bed.id },
@@ -100,6 +122,7 @@ export async function toggleSunbedStatus(sunbedId: string, date: Date, currentSt
         }
         
         revalidatePath(`/manager`);
+        eventManager.emit({ type: 'STATUS_UPDATE', sunbedId, date: startOfDay });
         return { success: true };
     } catch (error) {
         console.error("Failed to toggle status:", error);
@@ -113,20 +136,20 @@ export async function bookSunbed(sunbedId: string, date: Date) {
     throw new Error("Unauthorized");
   }
 
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
+  const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
   try {
       // Create booking with status CONFIRMED
       await prisma.booking.create({
           data: {
-              date: startOfDay,
+              date: bookingDate,
               sunbedId: sunbedId,
               userId: session.user.id,
               status: 'CONFIRMED'
           }
       });
       revalidatePath('/book');
+      eventManager.emit({ type: 'STATUS_UPDATE', sunbedId, date: bookingDate });
       return { success: true };
   } catch (error) {
        // Check for unique constraint violation (P2002)
@@ -139,24 +162,151 @@ export async function bookSunbed(sunbedId: string, date: Date) {
   }
 }
 
-export async function getAvailability(zoneId: string, date: Date) {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
+export async function getSunbedStatuses(zoneId: string, date: Date) {
+    const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    
+    try {
+        const sunbeds = await prisma.sunbed.findMany({
+            where: { zoneId },
+            include: {
+                bookings: {
+                    where: {
+                        date: bookingDate,
+                        status: { in: ['CONFIRMED', 'MAINTENANCE'] }
+                    }
+                }
+            }
+        });
+
+        return {
+            success: true,
+            statuses: sunbeds.map(sb => ({
+                id: sb.id,
+                status: sb.bookings[0]?.status === 'MAINTENANCE' ? 'DISABLED' : (sb.bookings[0] ? 'BOOKED' : 'FREE')
+            }))
+        };
+    } catch (error) {
+        console.error("Failed to fetch statuses:", error);
+        return { success: false, error: "Failed to fetch statuses" };
+    }
+}
+
+export async function saveMapObjects(zoneId: string, objects: MapObjectInput[]) {
+  const session = await auth();
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev && (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))) {
+    throw new Error("Unauthorized");
+  }
 
   try {
-    const bookings = await prisma.booking.findMany({
-      where: {
-        sunbed: { zoneId: zoneId },
-        date: startOfDay,
-      },
-      select: {
-        sunbedId: true,
-        status: true,
+    await prisma.$transaction(async (tx) => {
+      // Delete objects that are no longer present
+      const objectIds = objects.map(o => o.id);
+      await tx.mapObject.deleteMany({
+        where: {
+          zoneId: zoneId,
+          id: { notIn: objectIds }
+        }
+      });
+
+      for (const obj of objects) {
+        await tx.mapObject.upsert({
+          where: { id: obj.id },
+          create: {
+            id: obj.id,
+            zoneId: zoneId,
+            type: obj.type,
+            x: obj.x,
+            y: obj.y,
+            width: obj.width,
+            height: obj.height,
+            angle: obj.angle
+          },
+          update: {
+            type: obj.type,
+            x: obj.x,
+            y: obj.y,
+            width: obj.width,
+            height: obj.height,
+            angle: obj.angle
+          }
+        });
       }
     });
-    return { success: true, bookings };
+
+    revalidatePath(`/manager`);
+    revalidatePath(`/demo/editor`);
+    return { success: true };
   } catch (error) {
-    console.error("Failed to fetch availability:", error);
-    return { success: false, error: "Failed to fetch availability" };
+    console.error("Failed to save map objects:", error);
+    return { success: false, error: "Failed to save map objects" };
+  }
+}
+
+export async function updateZoomLevel(zoneId: string, zoomLevel: number) {
+  const session = await auth();
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev && (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    await prisma.zone.update({
+      where: { id: zoneId },
+      data: { zoomLevel }
+    });
+
+    revalidatePath(`/manager`);
+    revalidatePath(`/demo/editor`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update zoom level:", error);
+    return { success: false, error: "Failed to update zoom level" };
+  }
+}
+
+export async function getMapObjects(zoneId: string) {
+  try {
+    const objects = await prisma.mapObject.findMany({
+      where: { zoneId }
+    });
+
+    return {
+      success: true,
+      objects: objects.map(obj => ({
+        id: obj.id,
+        type: obj.type as 'SEA' | 'POOL' | 'HOTEL',
+        x: obj.x,
+        y: obj.y,
+        width: obj.width,
+        height: obj.height,
+        angle: obj.angle
+      }))
+    };
+  } catch (error) {
+    console.error("Failed to fetch map objects:", error);
+    return { success: false, error: "Failed to fetch map objects" };
+  }
+}
+
+export async function updateZoneBackground(zoneId: string, backgroundColor: string) {
+  const session = await auth();
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev && (!session || (session.user?.role !== "MANAGER" && session.user?.role !== "ADMIN"))) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    await prisma.zone.update({
+      where: { id: zoneId },
+      data: { backgroundColor }
+    });
+
+    revalidatePath(`/manager`);
+    revalidatePath(`/demo/editor`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update background color:", error);
+    return { success: false, error: "Failed to update background color" };
   }
 }

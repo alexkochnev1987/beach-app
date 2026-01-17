@@ -7,14 +7,24 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+  console.log('🔌 Инициализация Prisma 7 с адаптером PG...')
+  
+  // Используем ваш DATABASE_URL напрямую
+  const connectionString = process.env.DATABASE_URL
+
+  const pool = new pg.Pool({ 
+    connectionString,
+    // Для Neon/Vercel Postgres SSL обязателен
+    ssl: {
+      rejectUnauthorized: false
+    }
+  })
+  
   const adapter = new PrismaPg(pool)
+  
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
+    log: ["query", "error", "warn"],
   })
 }
 

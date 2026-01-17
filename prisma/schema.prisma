@@ -83,11 +83,14 @@ model Zone {
   hotelId   String
   hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   
-  imageUrl  String?  // Background image
-  width     Int      @default(1000) // Logical width for aspect ratio
-  height    Int      @default(800)  // Logical height for aspect ratio
+  imageUrl        String?
+  backgroundColor String   @default("#F4E4C1")
+  width           Int      @default(1000) // Logical width for aspect ratio
+  height          Int      @default(800)  // Logical height for aspect ratio
+  zoomLevel       Float    @default(1.0)  // Default zoom level for this zone
   
   sunbeds   Sunbed[]
+  objects   MapObject[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -109,6 +112,12 @@ model Sunbed {
   updatedAt DateTime @updatedAt
 
   @@index([zoneId])
+}
+
+enum ObjectType {
+  SEA
+  POOL
+  HOTEL
 }
 
 enum BookingStatus {
@@ -134,4 +143,22 @@ model Booking {
 
   @@unique([sunbedId, date], name: "unique_sunbed_date_booking") // Prevents double booking
   @@index([sunbedId, date])
+}
+
+model MapObject {
+  id        String     @id @default(cuid())
+  type      ObjectType
+  x         Float      // Normalized 0..1
+  y         Float      // Normalized 0..1
+  width     Float      // Normalized width
+  height    Float      // Normalized height
+  angle     Float      @default(0)
+  
+  zoneId    String
+  zone      Zone       @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([zoneId])
 }

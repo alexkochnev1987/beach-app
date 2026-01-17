@@ -3,7 +3,10 @@ import EditorPageClient from "@/components/map/EditorPageClient"
 
 export default async function DemoEditorPage() {
   const zone = await prisma.zone.findFirst({
-    include: { sunbeds: true },
+    include: { 
+      sunbeds: true,
+      objects: true
+    },
   })
 
   if (!zone) {
@@ -25,12 +28,23 @@ export default async function DemoEditorPage() {
     status: "FREE" as const, // Default for editor
   }))
 
+  const objects = zone.objects.map((obj) => ({
+    id: obj.id,
+    type: obj.type as 'SEA' | 'POOL' | 'HOTEL',
+    x: obj.x,
+    y: obj.y,
+    width: obj.width,
+    height: obj.height,
+    angle: obj.angle
+  }))
+
   const zoneData = {
     id: zone.id,
-    imageUrl: zone.imageUrl || "https://placeholder",
+    backgroundColor: zone.backgroundColor || "#F4E4C1",
     width: zone.width,
     height: zone.height,
+    zoomLevel: zone.zoomLevel
   }
 
-  return <EditorPageClient initialSunbeds={sunbeds} zone={zoneData} />
+  return <EditorPageClient initialSunbeds={sunbeds} initialObjects={objects} zone={zoneData} />
 }

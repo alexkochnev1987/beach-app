@@ -4,14 +4,19 @@ import Google from "next-auth/providers/google"
 export default {
   providers: [
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
     }),
   ],
+  session: { strategy: "jwt" },
   pages: {
     signIn: "/auth/signin",
   },
   callbacks: {
+    async signIn({ user, account, profile }) {
+      console.log("SignIn callback:", { user, account, profile });
+      return true;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user
       const paths = ["/book", "/manager", "/admin"]
@@ -24,19 +29,21 @@ export default {
       }
       return true
     },
-    // @ts-ignore
     async session({ session, token }) {
       if (token.sub && session.user) {
         session.user.id = token.sub
       }
-      // Note: Role might not be available in edge middleware session unless we put it in token
-      // We will handle role checks inside the middleware logic or repeated in auth.ts
+      
+      if (token.role && session.user) {
+        session.user.role = token.role
+      }
+      
       return session
     },
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user }) {
         if (user) {
             token.sub = user.id
-            // @ts-ignore
+            // @ts-ignore - 'role' exists on our custom User model in Prisma
             token.role = user.role
         }
         return token

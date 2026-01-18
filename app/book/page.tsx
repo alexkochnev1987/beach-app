@@ -1,75 +1,104 @@
-import { prisma } from "@/lib/prisma"
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import UserBookingClient from "@/components/booking/UserBookingClient"
-import { Label } from "@/components/ui/label"
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import UserBookingClient from "@/components/booking/UserBookingClient";
+import { Label } from "@/components/ui/label";
 
-export default async function BookingPage(props: { searchParams: Promise<{ date?: string; hotelId?: string }> }) {
+export default async function BookingPage(props: {
+  searchParams: Promise<{ date?: string; hotelId?: string }>;
+}) {
   const searchParams = await props.searchParams;
-  const session = await auth()
+  const session = await auth();
   if (!session) {
-      redirect("/api/auth/signin?callbackUrl=/book")
+    redirect("/api/auth/signin?callbackUrl=/book");
   }
 
   const hotels = await prisma.hotel.findMany({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
-  })
+  });
 
   if (hotels.length === 0) {
-    return <div className="container mx-auto p-4 max-w-4xl">No hotels found. Please contact admin.</div>
+    return (
+      <div className="container mx-auto p-4 max-w-4xl">
+        No hotels found. Please contact admin.
+      </div>
+    );
   }
 
-  const requestedHotelId = searchParams.hotelId
-  const selectedHotelId = hotels.find((hotel) => hotel.id === requestedHotelId)?.id || hotels[0].id
+  const requestedHotelId = searchParams.hotelId;
+  const selectedHotelId =
+    hotels.find((hotel) => hotel.id === requestedHotelId)?.id || hotels[0].id;
   if (!requestedHotelId || requestedHotelId !== selectedHotelId) {
-    const dateParam = searchParams.date ? `&date=${encodeURIComponent(searchParams.date)}` : ""
-    redirect(`/book?hotelId=${encodeURIComponent(selectedHotelId)}${dateParam}`)
+    const dateParam = searchParams.date
+      ? `&date=${encodeURIComponent(searchParams.date)}`
+      : "";
+    redirect(
+      `/book?hotelId=${encodeURIComponent(selectedHotelId)}${dateParam}`,
+    );
   }
 
-  const dateParam = searchParams.date ? new Date(searchParams.date) : new Date()
-  // Если дата пришла из URL, она обычно в формате YYYY-MM-DD, что при new Date() дает полночь UTC.
-  // Если это 'new Date()', мы хотим полночь UTC именно сегодняшнего дня.
-  const currentDate = searchParams.date 
-    ? new Date(Date.UTC(dateParam.getUTCFullYear(), dateParam.getUTCMonth(), dateParam.getUTCDate()))
-    : new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
+  const dateParam = searchParams.date
+    ? new Date(searchParams.date)
+    : new Date();
+
+  const currentDate = searchParams.date
+    ? new Date(
+        Date.UTC(
+          dateParam.getUTCFullYear(),
+          dateParam.getUTCMonth(),
+          dateParam.getUTCDate(),
+        ),
+      )
+    : new Date(
+        Date.UTC(
+          new Date().getFullYear(),
+          new Date().getMonth(),
+          new Date().getDate(),
+        ),
+      );
 
   const zone = await prisma.zone.findFirst({
     where: { hotelId: selectedHotelId },
-    include: { 
+    include: {
       sunbeds: {
         include: {
           bookings: {
             where: {
               date: currentDate,
-              status: { in: ['CONFIRMED', 'MAINTENANCE'] }
+              status: { in: ["CONFIRMED", "MAINTENANCE"] },
             },
             select: {
               status: true,
               userId: true,
             },
-          }
-        }
+          },
+        },
       },
-      objects: true
+      objects: true,
     },
-  })
+  });
 
   const hotelMapImages = await prisma.hotelMapImage.findMany({
     where: { hotelId: selectedHotelId },
     select: { hotelId: true, entityType: true, imageUrl: true },
-  })
+  });
 
-  if (!zone) return <div className="container mx-auto p-4 max-w-4xl">No zone found for this hotel.</div>
+  if (!zone)
+    return (
+      <div className="container mx-auto p-4 max-w-4xl">
+        No zone found for this hotel.
+      </div>
+    );
 
-  const sunbeds = zone.sunbeds.map((sb) => {
+  const sunbeds = zone.sunbeds.map((sb: (typeof zone.sunbeds)[number]) => {
     const booking = sb.bookings[0];
-    let status: 'FREE' | 'BOOKED' | 'DISABLED' = 'FREE';
+    let status: "FREE" | "BOOKED" | "DISABLED" = "FREE";
     const bookedByMe = !!booking?.userId && booking.userId === session.user?.id;
-    
+
     if (booking) {
-      status = booking.status === 'MAINTENANCE' ? 'DISABLED' : 'BOOKED';
+      status = booking.status === "MAINTENANCE" ? "DISABLED" : "BOOKED";
     }
 
     return {
@@ -83,7 +112,7 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
       status,
       bookedByMe,
     };
-  })
+  });
 
   const zoneData = {
     id: zone.id,
@@ -92,7 +121,7 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
     zoomLevel: zone.zoomLevel || 1.0,
     hotelMapImages,
     sunbeds,
-    objects: zone.objects.map((obj) => ({
+    objects: zone.objects.map((obj: (typeof zone.objects)[number]) => ({
       id: obj.id,
       type: obj.type,
       x: obj.x,
@@ -103,28 +132,36 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
       backgroundColor: obj.backgroundColor,
       imageUrl: obj.imageUrl,
     })),
-  }
+  };
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Book Your Sunbed</h1>
         <div className="flex items-center gap-4">
-            <div className="text-sm text-slate-500">
+          <div className="text-sm text-slate-500">
             Welcome, {session.user?.name || session.user?.email}
-            </div>
-             <form action={async () => {
-                 'use server';
-                 const { signOut } = await import('@/auth')
-                 await signOut({ redirectTo: "/" });
-             }}>
-                <Button variant="outline" size="sm">Sign Out</Button>
-             </form>
+          </div>
+          <form
+            action={async () => {
+              "use server";
+              const { signOut } = await import("@/auth");
+              await signOut({ redirectTo: "/" });
+            }}
+          >
+            <Button variant="outline" size="sm">
+              Sign Out
+            </Button>
+          </form>
         </div>
       </div>
-      
+
       <div className="bg-white p-4 rounded-xl shadow-sm border mb-4">
-        <form action="/book" method="get" className="mb-4 flex flex-wrap items-end gap-3">
+        <form
+          action="/book"
+          method="get"
+          className="mb-4 flex flex-wrap items-end gap-3"
+        >
           <div className="grid gap-1">
             <Label htmlFor="hotelId">Hotel</Label>
             <select
@@ -140,16 +177,25 @@ export default async function BookingPage(props: { searchParams: Promise<{ date?
               ))}
             </select>
           </div>
-          {searchParams.date ? <input type="hidden" name="date" value={searchParams.date} /> : null}
-          <Button type="submit" variant="outline" size="sm">Choose</Button>
+          {searchParams.date ? (
+            <input type="hidden" name="date" value={searchParams.date} />
+          ) : null}
+          <Button type="submit" variant="outline" size="sm">
+            Choose
+          </Button>
         </form>
-        <p className="mb-4 text-slate-600">Select a date and click on a free sunbed (green) to confirm your reservation.</p>
-        <UserBookingClient 
-            zoneData={zoneData} 
-            initialDate={currentDate.toISOString()} 
-            canCancelAny={session.user?.role === "ADMIN" || session.user?.role === "MANAGER"}
+        <p className="mb-4 text-slate-600">
+          Select a date and click on a free sunbed (green) to confirm your
+          reservation.
+        </p>
+        <UserBookingClient
+          zoneData={zoneData}
+          initialDate={currentDate.toISOString()}
+          canCancelAny={
+            session.user?.role === "ADMIN" || session.user?.role === "MANAGER"
+          }
         />
       </div>
     </div>
-  )
+  );
 }

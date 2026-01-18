@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { eventManager } from "@/lib/events";
 import { uploadImageToS3 } from "@/lib/s3";
+import type { Sunbed } from "@/types/map";
 
 function slugify(input: string) {
   return input
@@ -37,6 +38,8 @@ interface MapObjectInput {
   backgroundColor?: string | null;
   imageUrl?: string | null;
 }
+
+type SunbedStatus = NonNullable<Sunbed["status"]>;
 
 type MapEntityType = 'SUNBED' | 'SEA' | 'POOL' | 'HOTEL' | 'SAND';
 
@@ -174,7 +177,16 @@ export async function bookSunbed(sunbedId: string, date: Date) {
   }
 }
 
-export async function getSunbedStatuses(zoneId: string, date: Date) {
+export async function getSunbedStatuses(
+  zoneId: string,
+  date: Date,
+): Promise<
+  | {
+      success: true;
+      statuses: { id: string; status: SunbedStatus; bookedByMe: boolean }[];
+    }
+  | { success: false; error: string }
+> {
     const session = await auth();
     const userId = session?.user?.id ?? null;
     const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -198,7 +210,7 @@ export async function getSunbedStatuses(zoneId: string, date: Date) {
 
         return {
             success: true,
-            statuses: sunbeds.map(sb => ({
+            statuses: sunbeds.map((sb: (typeof sunbeds)[number]) => ({
                 id: sb.id,
                 status: sb.bookings[0]?.status === 'MAINTENANCE' ? 'DISABLED' : (sb.bookings[0] ? 'BOOKED' : 'FREE'),
                 bookedByMe: !!userId && sb.bookings[0]?.userId === userId,
@@ -327,7 +339,7 @@ export async function getMapObjects(zoneId: string) {
 
     return {
       success: true,
-      objects: objects.map(obj => ({
+      objects: objects.map((obj: (typeof objects)[number]) => ({
         id: obj.id,
         type: obj.type as 'SEA' | 'POOL' | 'HOTEL' | 'SAND',
         x: obj.x,

@@ -851,6 +851,18 @@ const SunbedNode = ({
             });
           }
         }}
+        onTransformEnd={() => {
+          if (isEditor && shapeRef.current) {
+            const node = shapeRef.current;
+            node.scaleX(1);
+            node.scaleY(1);
+            onChange({
+              x: node.x() / stageSize.width,
+              y: node.y() / stageSize.height,
+              angle: node.rotation(),
+            });
+          }
+        }}
         onMouseEnter={(e) => {
           const container = e.target.getStage()?.container();
           if (container) container.style.cursor = "pointer";
@@ -990,7 +1002,16 @@ export default function MapCanvas({
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const selectionAdditiveRef = useRef(false);
   const selectedIds = selectedIdsProp ?? internalSelectedIds;
-  const setSelectedIds = onSelectionChange ?? setInternalSelectedIds;
+  const setSelectedIds = (
+    next: string[] | ((prev: string[]) => string[]),
+  ) => {
+    const resolved = typeof next === "function" ? next(selectedIds) : next;
+    if (onSelectionChange) {
+      onSelectionChange(resolved);
+      return;
+    }
+    setInternalSelectedIds(resolved);
+  };
   const viewOffset = viewOffsetProp ?? internalViewOffset;
   const setViewOffset = onViewOffsetChange ?? setInternalViewOffset;
   const isPanMode = isPanModeProp ?? internalIsPanMode;

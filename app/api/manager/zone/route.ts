@@ -37,31 +37,41 @@ export async function GET(request: Request) {
       ))
     : null
 
-  const zone = await prisma.zone.findFirst({
+  const hotelMapImages = await prisma.hotelMapImage.findMany({
     where: { hotelId: hotel.id },
-    include: {
-      sunbeds: dateParam
-        ? {
-            include: {
-              bookings: {
-                where: {
-                  date: bookingDate ?? undefined,
-                  status: { in: ["CONFIRMED", "MAINTENANCE"] },
-                },
-              },
-            },
-          }
-        : true,
-      objects: true,
-    },
+    select: { hotelId: true, entityType: true, imageUrl: true },
   })
 
-  if (!zone) {
-    return NextResponse.json({ error: "No zone found" }, { status: 404 })
-  }
+  if (dateParam) {
+    const zone = await prisma.zone.findFirst({
+      where: { hotelId: hotel.id },
+      include: {
+        sunbeds: {
+          include: {
+            bookings: {
+              where: {
+                date: bookingDate ?? undefined,
+                status: { in: ["CONFIRMED", "MAINTENANCE"] },
+              },
+            },
+          },
+        },
+        objects: true,
+      },
+    })
 
-  const sunbeds = zone.sunbeds.map((sb) => {
-    if (!dateParam) {
+    if (!zone) {
+      return NextResponse.json({ error: "No zone found" }, { status: 404 })
+    }
+
+    const sunbeds = zone.sunbeds.map((sb: (typeof zone.sunbeds)[number]) => {
+      const booking = sb.bookings[0]
+      const status = booking
+        ? booking.status === "MAINTENANCE"
+          ? "DISABLED"
+          : "BOOKED"
+        : "FREE"
+
       return {
         id: sb.id,
         label: sb.label,
@@ -70,32 +80,54 @@ export async function GET(request: Request) {
         angle: sb.angle,
         scale: sb.scale,
         imageUrl: sb.imageUrl,
+        status,
       }
-    }
+    })
 
-    const booking = sb.bookings?.[0]
-    const status = booking
-      ? booking.status === "MAINTENANCE"
-        ? "DISABLED"
-        : "BOOKED"
-      : "FREE"
+    return NextResponse.json({
+      zone: {
+        id: zone.id,
+        width: zone.width,
+        height: zone.height,
+        zoomLevel: zone.zoomLevel,
+        hotelMapImages,
+        sunbeds,
+        objects: zone.objects.map((obj: (typeof zone.objects)[number]) => ({
+          id: obj.id,
+          type: obj.type,
+          x: obj.x,
+          y: obj.y,
+          width: obj.width,
+          height: obj.height,
+          angle: obj.angle,
+          backgroundColor: obj.backgroundColor,
+          imageUrl: obj.imageUrl,
+        })),
+      },
+    })
+  }
 
-    return {
-      id: sb.id,
-      label: sb.label,
-      x: sb.x,
-      y: sb.y,
-      angle: sb.angle,
-      scale: sb.scale,
-      imageUrl: sb.imageUrl,
-      status,
-    }
-  })
-
-  const hotelMapImages = await prisma.hotelMapImage.findMany({
+  const zone = await prisma.zone.findFirst({
     where: { hotelId: hotel.id },
-    select: { hotelId: true, entityType: true, imageUrl: true },
+    include: {
+      sunbeds: true,
+      objects: true,
+    },
   })
+
+  if (!zone) {
+    return NextResponse.json({ error: "No zone found" }, { status: 404 })
+  }
+
+  const sunbeds = zone.sunbeds.map((sb: (typeof zone.sunbeds)[number]) => ({
+    id: sb.id,
+    label: sb.label,
+    x: sb.x,
+    y: sb.y,
+    angle: sb.angle,
+    scale: sb.scale,
+    imageUrl: sb.imageUrl,
+  }))
 
   return NextResponse.json({
     zone: {
@@ -105,7 +137,7 @@ export async function GET(request: Request) {
       zoomLevel: zone.zoomLevel,
       hotelMapImages,
       sunbeds,
-      objects: zone.objects.map((obj) => ({
+      objects: zone.objects.map((obj: (typeof zone.objects)[number]) => ({
         id: obj.id,
         type: obj.type,
         x: obj.x,

@@ -105,6 +105,27 @@ export default function EditorPageClient({
       );
     },
   );
+  const mapEntityTypes: ObjectType[] = ["SEA", "POOL", "HOTEL", "SAND"];
+  const mapImages: HotelMapImage[] = [];
+
+  if (sunbedDefaultImage) {
+    mapImages.push({
+      hotelId: currentHotelId,
+      entityType: "SUNBED",
+      imageUrl: sunbedDefaultImage,
+    });
+  }
+
+  for (const type of mapEntityTypes) {
+    const imageUrl = objectTypeImages[type];
+    if (imageUrl) {
+      mapImages.push({
+        hotelId: currentHotelId,
+        entityType: type,
+        imageUrl,
+      });
+    }
+  }
   const [zoomLevel, setZoomLevel] = useState<number>(zone.zoomLevel || 1.0);
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [isPanMode, setIsPanMode] = useState(false);
@@ -663,24 +684,7 @@ export default function EditorPageClient({
           height={zone.height}
           sunbeds={sunbeds}
           objects={objects}
-          hotelMapImages={[
-            ...(sunbedDefaultImage
-              ? [
-                  {
-                    hotelId: currentHotelId,
-                    entityType: "SUNBED",
-                    imageUrl: sunbedDefaultImage,
-                  },
-                ]
-              : []),
-            ...(["SEA", "POOL", "HOTEL", "SAND"] as const)
-              .filter((type) => objectTypeImages[type])
-              .map((type) => ({
-                hotelId: currentHotelId,
-                entityType: type,
-                imageUrl: objectTypeImages[type] as string,
-              })),
-          ]}
+          hotelMapImages={mapImages}
           zoomLevel={zoomLevel}
           viewOffset={viewOffset}
           onViewOffsetChange={setViewOffset}

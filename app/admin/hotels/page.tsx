@@ -120,7 +120,7 @@ export default async function AdminHotelsPage(props: {
           <div className="text-sm text-slate-600">No hotels yet.</div>
         ) : (
           <div className="grid gap-2">
-            {hotels.map((hotel) => (
+            {hotels.map((hotel: (typeof hotels)[number]) => (
               <div key={hotel.id} className="flex items-center justify-between text-sm">
                 <div>
                   <div className="font-medium">{hotel.name}</div>

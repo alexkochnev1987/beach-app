@@ -137,6 +137,20 @@ export default function EditorPageClient({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const clampZoom = (value: number) => Math.min(2.0, Math.max(0.1, value));
+  const sunbedLabels = sunbeds
+    .map((bed) => bed.label || bed.id)
+    .filter((label) => label && label.trim().length > 0)
+    .join(", ");
+  const objectTypeCounts = objects.reduce(
+    (acc, obj) => {
+      acc[obj.type] = (acc[obj.type] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<ObjectType, number>,
+  );
+  const objectSummary = Object.entries(objectTypeCounts)
+    .map(([type, count]) => `${type}: ${count}`)
+    .join(", ");
 
   const handleSunbedChange = (id: string, newAttrs: Partial<Sunbed>) => {
     setSunbeds((prev) =>
@@ -494,18 +508,18 @@ export default function EditorPageClient({
   return (
     <div className="flex flex-col gap-4 p-4 h-screen">
       {/* Top toolbar */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow">
+      <div className="flex flex-col gap-4 bg-white p-4 rounded-lg shadow md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold">Map Editor</h1>
         </div>
-        <div className="flex gap-2 items-center">
-          <div className="grid gap-1">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto md:justify-end">
+          <div className="grid gap-1 w-full sm:w-60">
             <Label htmlFor="hotel-select">Hotel</Label>
             <select
               id="hotel-select"
               value={currentHotelId}
               onChange={(event) => onHotelChange(event.target.value)}
-              className="h-9 w-60 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
             >
               {hotels.map((hotel) => (
                 <option key={hotel.id} value={hotel.id}>
@@ -514,7 +528,7 @@ export default function EditorPageClient({
               ))}
             </select>
           </div>
-          <Label htmlFor="bg-color" className="font-semibold mr-2">
+          <Label htmlFor="bg-color" className="font-semibold">
             Ground:
           </Label>
           <Input
@@ -553,92 +567,94 @@ export default function EditorPageClient({
       </div>
 
       {/* Object type selector toolbar */}
-      <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow">
-        <Label className="font-semibold">Add Object:</Label>
+      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-lg shadow">
+        <div className="flex flex-wrap items-center gap-3">
+          <Label className="font-semibold">Add Object:</Label>
 
-        <Button
-          onClick={() => handleAddObject("SEA")}
-          variant={selectedTool === "SEA" ? "default" : "outline"}
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          <Waves className="h-4 w-4" />
-          Sea
-        </Button>
+          <Button
+            onClick={() => handleAddObject("SEA")}
+            variant={selectedTool === "SEA" ? "default" : "outline"}
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Waves className="h-4 w-4" />
+            Sea
+          </Button>
 
-        <Button
-          onClick={() => handleAddObject("POOL")}
-          variant={selectedTool === "POOL" ? "default" : "outline"}
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          <RectangleHorizontal className="h-4 w-4" />
-          Pool
-        </Button>
+          <Button
+            onClick={() => handleAddObject("POOL")}
+            variant={selectedTool === "POOL" ? "default" : "outline"}
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RectangleHorizontal className="h-4 w-4" />
+            Pool
+          </Button>
 
-        <Button
-          onClick={() => handleAddObject("HOTEL")}
-          variant={selectedTool === "HOTEL" ? "default" : "outline"}
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          <Building2 className="h-4 w-4" />
-          Hotel
-        </Button>
+          <Button
+            onClick={() => handleAddObject("HOTEL")}
+            variant={selectedTool === "HOTEL" ? "default" : "outline"}
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Building2 className="h-4 w-4" />
+            Hotel
+          </Button>
 
-        <Button
-          onClick={() => {
-            if (groundObject) {
-              setSelectedIds([groundObject.id]);
-            } else {
-              handleAddObject("SAND");
+          <Button
+            onClick={() => {
+              if (groundObject) {
+                setSelectedIds([groundObject.id]);
+              } else {
+                handleAddObject("SAND");
+              }
+            }}
+            variant={selectedTool === "SAND" ? "default" : "outline"}
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Layers className="h-4 w-4" />
+            Ground
+          </Button>
+
+          <Button
+            onClick={handleAddSunbed}
+            variant={selectedTool === "sunbed" ? "default" : "outline"}
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Armchair className="h-4 w-4" />
+            Sunbed
+          </Button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_IMAGE_TYPES.join(",")}
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            disabled={
+              isUploading ||
+              (!getActiveEntityType() &&
+                !selectedIds.some(
+                  (id) =>
+                    sunbeds.some((bed) => bed.id === id) ||
+                    objects.some((obj) => obj.id === id),
+                ))
             }
-          }}
-          variant={selectedTool === "SAND" ? "default" : "outline"}
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          <Layers className="h-4 w-4" />
-          Ground
-        </Button>
+          >
+            <ImageUp className="h-4 w-4" />
+            {isUploading ? "Uploading..." : "Image"}
+          </Button>
+        </div>
 
-        <Button
-          onClick={handleAddSunbed}
-          variant={selectedTool === "sunbed" ? "default" : "outline"}
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          <Armchair className="h-4 w-4" />
-          Sunbed
-        </Button>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_IMAGE_TYPES.join(",")}
-          className="hidden"
-          onChange={handleImageUpload}
-        />
-        <Button
-          onClick={() => fileInputRef.current?.click()}
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2"
-          disabled={
-            isUploading ||
-            (!getActiveEntityType() &&
-              !selectedIds.some(
-                (id) =>
-                  sunbeds.some((bed) => bed.id === id) ||
-                  objects.some((obj) => obj.id === id),
-              ))
-          }
-        >
-          <ImageUp className="h-4 w-4" />
-          {isUploading ? "Uploading..." : "Image"}
-        </Button>
-
-        <div className="ml-auto flex items-center gap-4">
+        <div className="ml-auto flex flex-wrap items-center gap-4 w-full md:w-auto md:ml-auto">
           <div
             className="flex items-center gap-2"
             title="Hold Space to pan. On touch devices, toggle this to drag the map."
@@ -672,8 +688,6 @@ export default function EditorPageClient({
           <ZoomControls
             zoomLevel={zoomLevel}
             onZoomChange={handleZoomChange}
-            minZoom={0.1}
-            maxZoom={2.0}
           />
         </div>
       </div>
@@ -703,11 +717,13 @@ export default function EditorPageClient({
       <div className="grid grid-cols-2 gap-4">
         <div className="h-32 bg-white p-4 rounded-lg overflow-y-auto font-mono text-xs border">
           <div className="font-bold mb-2">Sunbeds ({sunbeds.length}):</div>
-          {JSON.stringify(sunbeds, null, 2)}
+          <div className="text-slate-600">
+            {sunbedLabels || "No labels"}
+          </div>
         </div>
         <div className="h-32 bg-white p-4 rounded-lg overflow-y-auto font-mono text-xs border">
           <div className="font-bold mb-2">Objects ({objects.length}):</div>
-          {JSON.stringify(objects, null, 2)}
+          <div className="text-slate-600">{objectSummary || "None"}</div>
         </div>
       </div>
     </div>

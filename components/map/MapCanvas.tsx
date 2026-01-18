@@ -888,7 +888,9 @@ const SunbedNode = ({
           height={size * 1.5}
           fill={
             shapeProps.status === "BOOKED"
-              ? (isBookedByMe ? "#3b82f6" : "#9ca3af")
+              ? isBookedByMe
+                ? "#3b82f6"
+                : "#9ca3af"
               : shapeProps.status === "DISABLED"
                 ? "#6b7280"
                 : "#22c55e"
@@ -1002,9 +1004,7 @@ export default function MapCanvas({
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const selectionAdditiveRef = useRef(false);
   const selectedIds = selectedIdsProp ?? internalSelectedIds;
-  const setSelectedIds = (
-    next: string[] | ((prev: string[]) => string[]),
-  ) => {
+  const setSelectedIds = (next: string[] | ((prev: string[]) => string[])) => {
     const resolved = typeof next === "function" ? next(selectedIds) : next;
     if (onSelectionChange) {
       onSelectionChange(resolved);
@@ -1020,11 +1020,17 @@ export default function MapCanvas({
   useEffect(() => {
     const checkSize = () => {
       if (containerRef.current) {
-        const { offsetWidth } = containerRef.current;
-        const ratio = height / width;
+        const { offsetWidth, offsetHeight } = containerRef.current;
+        const ratio = width / height;
+        if (!offsetWidth || !offsetHeight) {
+          return;
+        }
+        const scale = Math.max(offsetWidth / width, offsetHeight / height);
+        const nextWidth = width * scale;
+        const nextHeight = height * scale;
         setContainerSize({
-          width: offsetWidth,
-          height: offsetWidth * ratio,
+          width: nextWidth,
+          height: nextHeight,
         });
       }
     };
@@ -1054,24 +1060,8 @@ export default function MapCanvas({
   }, [isEditor]);
 
   useEffect(() => {
-    const clamped = Math.min(maxZoom, Math.max(minZoom, zoomLevel));
-    setInternalZoom(clamped);
-    if (!isEditor) {
-      const next = clampViewOffset(viewOffset, clamped);
-      if (next.x !== viewOffset.x || next.y !== viewOffset.y) {
-        setViewOffset(next);
-      }
-    }
-  }, [
-    isEditor,
-    zoomLevel,
-    minZoom,
-    maxZoom,
-    containerSize.width,
-    containerSize.height,
-    viewOffset.x,
-    viewOffset.y,
-  ]);
+    setInternalZoom(zoomLevel);
+  }, [zoomLevel]);
 
   const effectiveZoom = isEditor ? zoomLevel : internalZoom;
   const scaledWidth = containerSize.width * effectiveZoom;
@@ -1092,25 +1082,7 @@ export default function MapCanvas({
     return map;
   }, [hotelMapImages]);
 
-  const clampViewOffset = (
-    next: { x: number; y: number },
-    zoom = effectiveZoom,
-  ) => {
-    const mapWidth = containerSize.width * zoom;
-    const mapHeight = containerSize.height * zoom;
-    const minX =
-      mapWidth <= containerSize.width ? 0 : containerSize.width - mapWidth;
-    const maxX =
-      mapWidth <= containerSize.width ? containerSize.width - mapWidth : 0;
-    const minY =
-      mapHeight <= containerSize.height ? 0 : containerSize.height - mapHeight;
-    const maxY =
-      mapHeight <= containerSize.height ? containerSize.height - mapHeight : 0;
-    return {
-      x: Math.min(maxX, Math.max(minX, next.x)),
-      y: Math.min(maxY, Math.max(minY, next.y)),
-    };
-  };
+  const clampViewOffset = (next: { x: number; y: number }) => next;
 
   if (containerSize.width === 0) {
     return (
@@ -1315,10 +1287,7 @@ export default function MapCanvas({
     const oldZoom = effectiveZoom;
     const zoomBy = 1.05;
     const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const nextZoom = Math.min(
-      maxZoom,
-      Math.max(minZoom, oldZoom * (direction > 0 ? zoomBy : 1 / zoomBy)),
-    );
+    const nextZoom = oldZoom * (direction > 0 ? zoomBy : 1 / zoomBy);
     const contentX =
       (pointer.x - viewOffset.x) / (containerSize.width * oldZoom);
     const contentY =
@@ -1330,30 +1299,24 @@ export default function MapCanvas({
     if (isEditor) {
       onZoomChange?.(nextZoom);
       setViewOffset(nextOffset);
-    } else {
-      setInternalZoom(nextZoom);
-      const clamped = clampViewOffset(nextOffset, nextZoom);
-      setViewOffset(clamped);
+      return;
     }
+    setInternalZoom(nextZoom);
+    setViewOffset(nextOffset);
   };
 
   const handleStageDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (isEditor && !isPanMode) return;
-    const next = clampViewOffset({ x: e.target.x(), y: e.target.y() });
-    setViewOffset(next);
+    setViewOffset({ x: e.target.x(), y: e.target.y() });
   };
 
   const handleStageDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (isEditor && !isPanMode) return;
-    const next = clampViewOffset({ x: e.target.x(), y: e.target.y() });
-    setViewOffset(next);
+    setViewOffset({ x: e.target.x(), y: e.target.y() });
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full relative shadow-lg rounded-xl overflow-hidden border border-gray-200"
-    >
+    <div ref={containerRef} className="w-full relative h-full">
       <Stage
         ref={stageRef}
         width={containerSize.width}

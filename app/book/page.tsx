@@ -168,7 +168,7 @@ export default async function BookingPage(props: {
               id="hotelId"
               name="hotelId"
               defaultValue={selectedHotelId}
-              className="h-9 w-[240px] rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+              className="h-9 w-60 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
             >
               {hotels.map((hotel) => (
                 <option key={hotel.id} value={hotel.id}>

@@ -7,25 +7,21 @@ import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 interface ZoomControlsProps {
   zoomLevel: number;
   onZoomChange: (zoom: number) => void;
-  minZoom?: number;
-  maxZoom?: number;
   step?: number;
 }
 
 export default function ZoomControls({
   zoomLevel,
   onZoomChange,
-  minZoom = 0.5,
-  maxZoom = 3.0,
   step = 0.1,
 }: ZoomControlsProps) {
   const handleZoomIn = () => {
-    const newZoom = Math.min(zoomLevel + step, maxZoom);
+    const newZoom = zoomLevel + step;
     onZoomChange(Number(newZoom.toFixed(1)));
   };
 
   const handleZoomOut = () => {
-    const newZoom = Math.max(zoomLevel - step, minZoom);
+    const newZoom = zoomLevel - step;
     onZoomChange(Number(newZoom.toFixed(1)));
   };
 
@@ -37,7 +33,6 @@ export default function ZoomControls({
     <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-md border">
       <Button
         onClick={handleZoomOut}
-        disabled={zoomLevel <= minZoom}
         variant="outline"
         size="sm"
         title="Zoom Out"
@@ -51,7 +46,6 @@ export default function ZoomControls({
 
       <Button
         onClick={handleZoomIn}
-        disabled={zoomLevel >= maxZoom}
         variant="outline"
         size="sm"
         title="Zoom In"

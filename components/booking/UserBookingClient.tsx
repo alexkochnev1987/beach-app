@@ -39,8 +39,14 @@ export default function UserBookingClient({
 }) {
   const router = useRouter();
   const minZoom = Math.min(zoneData.zoomLevel ?? 1, 1);
+  const initialUtcDate = new Date(initialDate);
+  const initialLocalDate = new Date(
+    initialUtcDate.getUTCFullYear(),
+    initialUtcDate.getUTCMonth(),
+    initialUtcDate.getUTCDate(),
+  );
   const { sunbeds, date, isLoading, handleDateChange, updateSunbedLocally } =
-    useSunbeds(zoneData, new Date(initialDate));
+    useSunbeds(zoneData, initialLocalDate);
   const { toast } = useToast();
 
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
@@ -49,6 +55,16 @@ export default function UserBookingClient({
     null,
   );
   const [zoomLevel, setZoomLevel] = useState<number>(minZoom);
+  const today = new Date();
+  const todayLocal = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const selectedLocalDate = date
+    ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    : null;
+  const isPastDate = !!selectedLocalDate && selectedLocalDate < todayLocal;
 
   const handleDateSelect = async (newDate: Date | undefined) => {
     if (!newDate) return;
@@ -58,6 +74,9 @@ export default function UserBookingClient({
   };
 
   const handleSunbedClick = (id: string) => {
+    if (isPastDate) {
+      return;
+    }
     const bed = sunbeds.find((b) => b.id === id);
     if (!bed || bed.loading || pendingAction) {
       return;
@@ -174,10 +193,7 @@ export default function UserBookingClient({
                 <CalendarIcon className="mr-2 h-4 w-4" />
               )}
               {date ? (
-                format(
-                  new Date(date.getTime() + date.getTimezoneOffset() * 60000),
-                  "PPP",
-                )
+                format(date, "PPP")
               ) : (
                 <span>Pick a date</span>
               )}
@@ -189,6 +205,7 @@ export default function UserBookingClient({
               selected={date}
               onSelect={handleDateSelect}
               initialFocus
+              disabled={{ before: todayLocal }}
             />
           </PopoverContent>
         </Popover>
@@ -218,6 +235,12 @@ export default function UserBookingClient({
             )}
             Cancel Booking ({selectedCancelIds.length})
           </Button>
+        )}
+
+        {isPastDate && (
+          <div className="w-full text-sm text-amber-600">
+            Booking for past dates is not available.
+          </div>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { eventManager } from "@/lib/events";
+import { toUtcDateOnly } from "@/lib/date";
 import { uploadImageToS3 } from "@/lib/s3";
 import type { Sunbed } from "@/types/map";
 
@@ -107,8 +108,7 @@ export async function toggleSunbedStatus(sunbedId: string, date: Date, currentSt
     // If status is becoming 'FREE', we DELETE the booking record for that date.
     
     // Normalize date to midnight UTC or just strip time strictly
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0,0,0,0);
+    const startOfDay = toUtcDateOnly(date);
 
     try {
         if (currentStatus === 'FREE') {
@@ -151,7 +151,7 @@ export async function bookSunbed(sunbedId: string, date: Date) {
     throw new Error("Unauthorized");
   }
 
-  const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const bookingDate = toUtcDateOnly(date);
 
   try {
       // Create booking with status CONFIRMED
@@ -189,7 +189,7 @@ export async function getSunbedStatuses(
 > {
     const session = await auth();
     const userId = session?.user?.id ?? null;
-    const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const bookingDate = toUtcDateOnly(date);
     
     try {
         const sunbeds = await prisma.sunbed.findMany({
@@ -228,7 +228,7 @@ export async function cancelBooking(sunbedId: string, date: Date) {
     throw new Error("Unauthorized");
   }
 
-  const bookingDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const bookingDate = toUtcDateOnly(date);
   const isPrivileged = session.user.role === "MANAGER" || session.user.role === "ADMIN";
 
   try {

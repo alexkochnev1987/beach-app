@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
+import { parseDateOnly, toUtcDateOnly } from "@/lib/date"
 
 export async function GET(request: Request) {
   const session = await auth()
@@ -29,13 +30,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const bookingDate = dateParam
-    ? new Date(Date.UTC(
-        new Date(dateParam).getUTCFullYear(),
-        new Date(dateParam).getUTCMonth(),
-        new Date(dateParam).getUTCDate(),
-      ))
-    : null
+  const bookingDate = dateParam ? toUtcDateOnly(parseDateOnly(dateParam)) : null
 
   const hotelMapImages = await prisma.hotelMapImage.findMany({
     where: { hotelId: hotel.id },

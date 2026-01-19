@@ -13,7 +13,7 @@ import {
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSunbeds, type Sunbed } from "@/hooks/useSunbeds";
 import type { HotelMapImage, MapObject } from "@/types/map";
 import { useToast } from "@/components/ui/toast";
@@ -37,16 +37,17 @@ export default function UserBookingClient({
   initialDate: string;
   canCancelAny: boolean;
 }) {
-  const router = useRouter();
+  const normalizeToNoon = (value: Date) => {
+    const next = new Date(value);
+    next.setHours(12, 0, 0, 0);
+    return next;
+  };
+
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const minZoom = Math.min(zoneData.zoomLevel ?? 1, 1);
-  const initialUtcDate = new Date(initialDate);
-  const initialLocalDate = new Date(
-    initialUtcDate.getUTCFullYear(),
-    initialUtcDate.getUTCMonth(),
-    initialUtcDate.getUTCDate(),
-  );
   const { sunbeds, date, isLoading, handleDateChange, updateSunbedLocally } =
-    useSunbeds(zoneData, initialLocalDate);
+    useSunbeds(zoneData, normalizeToNoon(new Date(initialDate)));
   const { toast } = useToast();
 
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
@@ -56,27 +57,25 @@ export default function UserBookingClient({
   );
   const [zoomLevel, setZoomLevel] = useState<number>(minZoom);
   const today = new Date();
-  const todayLocal = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  const selectedLocalDate = date
-    ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    : null;
-  const isPastDate = !!selectedLocalDate && selectedLocalDate < todayLocal;
+  today.setHours(0, 0, 0, 0);
+
+  const updateDateInUrl = (nextDate: Date) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("date", nextDate.toISOString());
+    const nextUrl = `${pathname}?${params.toString()}`;
+    window.history.replaceState(null, "", nextUrl);
+  };
 
   const handleDateSelect = async (newDate: Date | undefined) => {
     if (!newDate) return;
+    const normalizedDate = normalizeToNoon(newDate);
     setSelectedBookIds([]);
     setSelectedCancelIds([]);
-    handleDateChange(newDate);
+    handleDateChange(normalizedDate);
+    updateDateInUrl(normalizedDate);
   };
 
   const handleSunbedClick = (id: string) => {
-    if (isPastDate) {
-      return;
-    }
     const bed = sunbeds.find((b) => b.id === id);
     if (!bed || bed.loading || pendingAction) {
       return;
@@ -204,8 +203,8 @@ export default function UserBookingClient({
               mode="single"
               selected={date}
               onSelect={handleDateSelect}
+              disabled={{ before: today }}
               initialFocus
-              disabled={{ before: todayLocal }}
             />
           </PopoverContent>
         </Popover>
@@ -235,12 +234,6 @@ export default function UserBookingClient({
             )}
             Cancel Booking ({selectedCancelIds.length})
           </Button>
-        )}
-
-        {isPastDate && (
-          <div className="w-full text-sm text-amber-600">
-            Booking for past dates is not available.
-          </div>
         )}
       </div>
 

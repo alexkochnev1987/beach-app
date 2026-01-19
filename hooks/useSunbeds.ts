@@ -66,18 +66,11 @@ export function useSunbeds(zoneData: Zone, initialDate: Date) {
                 const data = JSON.parse(event.data);
                 if (data.type === 'STATUS_UPDATE') {
                     const eventDate = new Date(data.date);
-                    const currentDateKey = [
-                        date.getFullYear(),
-                        String(date.getMonth() + 1).padStart(2, '0'),
-                        String(date.getDate()).padStart(2, '0'),
-                    ].join('-');
-                    const eventDateKey = [
-                        eventDate.getUTCFullYear(),
-                        String(eventDate.getUTCMonth() + 1).padStart(2, '0'),
-                        String(eventDate.getUTCDate()).padStart(2, '0'),
-                    ].join('-');
+                    // Compare only date part to avoid timezone mismatches in direct comparison
+                    const currentDateStr = date.toISOString().split('T')[0];
+                    const eventDateStr = eventDate.toISOString().split('T')[0];
 
-                    if (currentDateKey === eventDateKey) {
+                    if (currentDateStr === eventDateStr) {
                         // Silent update for better UX
                         refreshStatuses(date, true);
                     }

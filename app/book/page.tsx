@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import UserBookingClient from "@/components/booking/UserBookingClient";
 import { Label } from "@/components/ui/label";
-import { parseDateOnly, toUtcDateOnly } from "@/lib/date";
+
+const normalizeToNoon = (value: Date) => {
+  const next = new Date(value);
+  next.setHours(12, 0, 0, 0);
+  return next;
+};
 
 export default async function BookingPage(props: {
   searchParams: Promise<{ date?: string; hotelId?: string }>;
@@ -41,12 +46,10 @@ export default async function BookingPage(props: {
   }
 
   const dateParam = searchParams.date
-    ? parseDateOnly(searchParams.date)
+    ? new Date(searchParams.date)
     : new Date();
 
-  const currentDate = searchParams.date
-    ? toUtcDateOnly(dateParam)
-    : toUtcDateOnly(new Date());
+  const currentDate = normalizeToNoon(searchParams.date ? dateParam : new Date());
 
   const zone = await prisma.zone.findFirst({
     where: { hotelId: selectedHotelId },
